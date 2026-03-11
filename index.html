@@ -88,7 +88,7 @@ function Banner({ status, onDismiss }) {
   const color = isErr ? "#991b1b" : status.type === "success" ? "#166534" : "#1e40af";
   const icon = status.type === "syncing" ? "🔄" : isErr ? "⚠️" : "✅";
   return (
-    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "8px 14px", margin: "0 0 10px", animation: "fadeIn 0.2s ease", fontSize: 12, color }}>
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "8px 14px", margin: "0 0 10px", height: "fit-content", animation: "fadeIn 0.2s ease", fontSize: 12, color }}>
       <div style={{ display: "flex", gap: 8, overflowX: "auto", height: "calc(100vh - 160px)", alignItems: "stretch" }}>
         <span style={{ display: "inline-block", animation: status.type === "syncing" ? "spin 1s linear infinite" : "none", flexShrink: 0 }}>{icon}</span>
         <span style={{ flex: 1, lineHeight: 1.4, fontWeight: 600 }}>{status.msg}</span>
