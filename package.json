@@ -1,0 +1,8 @@
+{
+  "name": "cofit-task-manager",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}
