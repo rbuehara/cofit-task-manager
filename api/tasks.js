@@ -13,7 +13,19 @@ headers:{
 Authorization:`Bearer ${notionKey}`,
 "Notion-Version":"2022-06-28",
 "Content-Type":"application/json"
+},
+
+body:JSON.stringify({
+
+filter:{
+property:"Status",
+select:{
+does_not_equal:"Concluído"
 }
+}
+
+})
+
 })
 
 const data = await response.json()
@@ -21,8 +33,6 @@ const data = await response.json()
 return res.status(200).json(data)
 
 }
-
-
 
 if(req.method === "POST"){
 
@@ -43,9 +53,7 @@ properties:{
 "Título":{
 title:[
 {
-text:{
-content:title
-}
+text:{content:title}
 }
 ]
 }
