@@ -16,12 +16,18 @@ export default async function handler(req, res) {
         if (cursor) body.start_cursor = cursor;
 
         // If ?active=1, filter out Concluído
-        if (req.query.active === "1") {
-          body.filter = {
-            property: "Status",
-            select: { does_not_equal: "Concluído" },
-          };
-        }
+        const today = new Date().toISOString().split("T")[0];
+body.filter = {
+  or: [
+    { property: "Status", select: { does_not_equal: "Concluído" } },
+    {
+      and: [
+        { property: "Status", select: { equals: "Concluído" } },
+        { property: "Concluído em", date: { on_or_after: today } },
+      ],
+    },
+  ],
+};
 
         const r = await fetch(
           `https://api.notion.com/v1/databases/${databaseId()}/query`,
