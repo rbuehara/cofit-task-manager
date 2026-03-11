@@ -1,6 +1,8 @@
 const { notionHeaders, buildProperties, parsePage } = require("../_notion");
+const requireAuth = require("../_auth");
 
 export default async function handler(req, res) {
+  if (!requireAuth(req, res)) return;
   try {
     const { id } = req.query;
     if (!id) return res.status(400).json({ error: "Missing page id" });
