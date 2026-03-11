@@ -1,4 +1,10 @@
-const { notionHeaders, databaseId, buildProperties, parsePage } = require("./_notion");
+const requireAuth = require("./_auth"); // ou require("../_auth") no [id].js
+
+export default async function handler(req, res) {
+  if (!requireAuth(req, res)) return; // bloqueia aqui se não autenticado
+  // ... resto do código
+
+  const { notionHeaders, databaseId, buildProperties, parsePage } = require("./_notion");
 
 export default async function handler(req, res) {
   try {
