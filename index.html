@@ -18,10 +18,120 @@ input:focus, textarea:focus, select:focus { border-color: #4f46e5 !important; ou
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 .card-wrap:hover .hover-actions { display: flex !important; }
+
+/* ── Auth overlay ── */
+#auth-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,0.92);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.25s ease;
+}
+#auth-box {
+  background: #fff; border-radius: 16px;
+  padding: 36px 32px; max-width: 360px; width: 92%;
+  box-shadow: 0 24px 48px rgba(0,0,0,0.22);
+}
+#auth-box h2 { margin: 0 0 4px; font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; }
+#auth-box p  { margin: 0 0 22px; font-size: 12px; color: #64748b; }
+#auth-input  {
+  width: 100%; padding: 9px 11px; border-radius: 7px;
+  border: 1.5px solid #e2e8f0; font-size: 14px;
+  font-family: inherit; box-sizing: border-box;
+  margin-bottom: 12px; outline: none;
+  transition: border-color 0.15s;
+}
+#auth-input:focus { border-color: #4f46e5; }
+#auth-btn {
+  width: 100%; padding: 10px; border-radius: 7px; border: none;
+  background: #4f46e5; color: #fff; font-weight: 700;
+  font-size: 14px; cursor: pointer; font-family: inherit;
+  transition: opacity 0.15s;
+}
+#auth-btn:hover { opacity: 0.88; }
+#auth-btn:disabled { opacity: 0.5; cursor: default; }
+#auth-err { color: #dc2626; font-size: 11px; margin: 8px 0 0; display: none; }
 </style>
 </head>
 <body>
 <div id="root"></div>
+
+<!-- ── Auth (plain JS, runs before React) ── -->
+<script>
+  window.AUTH_TOKEN = sessionStorage.getItem("cofit-auth") || "";
+
+  // Called by React's api() on 401, or on first load without token
+  window.showPasswordPrompt = function(onSuccess) {
+    if (document.getElementById("auth-overlay")) return;
+
+    const overlay = document.createElement("div");
+    overlay.id = "auth-overlay";
+    overlay.innerHTML = `
+      <div id="auth-box">
+        <h2>COFIT</h2>
+        <p>Digite a senha de acesso para continuar.</p>
+        <input id="auth-input" type="password" placeholder="Senha..." autocomplete="current-password" />
+        <button id="auth-btn">Entrar</button>
+        <p id="auth-err">Senha incorreta. Tente novamente.</p>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const input = document.getElementById("auth-input");
+    const btn   = document.getElementById("auth-btn");
+    const err   = document.getElementById("auth-err");
+
+    async function tryLogin() {
+      const val = input.value.trim();
+      if (!val) return;
+      btn.disabled = true;
+      btn.textContent = "Verificando...";
+      err.style.display = "none";
+
+      try {
+        const r = await fetch("/api/tasks", {
+          headers: { "x-auth-token": val }
+        });
+        if (r.status === 401) {
+          err.style.display = "block";
+          input.value = "";
+          btn.disabled = false;
+          btn.textContent = "Entrar";
+          input.focus();
+        } else {
+          window.AUTH_TOKEN = val;
+          sessionStorage.setItem("cofit-auth", val);
+          overlay.remove();
+          if (typeof onSuccess === "function") onSuccess();
+        }
+      } catch {
+        err.textContent = "Erro de conexão. Tente novamente.";
+        err.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "Entrar";
+      }
+    }
+
+    btn.addEventListener("click", tryLogin);
+    input.addEventListener("keydown", e => e.key === "Enter" && tryLogin());
+    setTimeout(() => input.focus(), 80);
+  };
+
+  // Mount React — called after auth confirmed
+  window.mountApp = function() {
+    // Defined below in the Babel script; called once auth passes
+  };
+
+  // On load: if no token, show prompt first; otherwise React will validate on first api() call
+  if (!window.AUTH_TOKEN) {
+    document.addEventListener("DOMContentLoaded", function() {
+      window.showPasswordPrompt(function() {
+        window.mountApp();
+      });
+    });
+  }
+</script>
 
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
@@ -53,13 +163,26 @@ const fmtDateShort = (iso) => { if (!iso) return "—"; try { return new Date(is
 const isOverdue = (dl, col) => dl && col !== "Concluído" && new Date(dl) < new Date();
 const calcDuration = (s, e) => { if (!s || !e) return null; const ms = new Date(e) - new Date(s); if (ms < 0) return null; const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000); return h > 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${h}h ${m}min`; };
 
-/* ── API calls ── */
+/* ── API — inclui token e trata 401 ── */
 async function api(path, opts = {}) {
   const r = await fetch(path, {
     ...opts,
-    headers: { "Content-Type": "application/json", ...opts.headers },
+    headers: {
+      "Content-Type": "application/json",
+      "x-auth-token": window.AUTH_TOKEN || "",
+      ...opts.headers,
+    },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
+
+  // Sessão expirada ou inválida → mostra prompt novamente
+  if (r.status === 401) {
+    sessionStorage.removeItem("cofit-auth");
+    window.AUTH_TOKEN = "";
+    window.showPasswordPrompt(() => window.location.reload());
+    throw new Error("Sessão expirada. Faça login novamente.");
+  }
+
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
   return data;
@@ -88,8 +211,8 @@ function Banner({ status, onDismiss }) {
   const color = isErr ? "#991b1b" : status.type === "success" ? "#166534" : "#1e40af";
   const icon = status.type === "syncing" ? "🔄" : isErr ? "⚠️" : "✅";
   return (
-    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "8px 14px", margin: "0 0 10px", height: "fit-content", animation: "fadeIn 0.2s ease", fontSize: 12, color }}>
-      <div style={{ display: "flex", gap: 8, overflowX: "auto", height: "calc(100vh - 160px)", alignItems: "stretch" }}>
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "8px 14px", margin: "0 0 10px", animation: "fadeIn 0.2s ease", fontSize: 12, color }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ display: "inline-block", animation: status.type === "syncing" ? "spin 1s linear infinite" : "none", flexShrink: 0 }}>{icon}</span>
         <span style={{ flex: 1, lineHeight: 1.4, fontWeight: 600 }}>{status.msg}</span>
         {status.type !== "syncing" && <button onClick={onDismiss} style={{ border: "none", background: "transparent", color: "#94a3b8", cursor: "pointer", fontSize: 14, padding: "0 2px", lineHeight: 1 }}>✕</button>}
@@ -153,7 +276,6 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, process
   const overdue = isOverdue(task.deadline, task.column);
   const isDone = task.column === "Concluído";
 
-  // Reset form when task changes externally
   useEffect(() => { setET(task.title); setED(task.description); setEDl(task.deadline || ""); }, [task.title, task.description, task.deadline]);
 
   const save = () => { if (!eT.trim()) return; onEdit(task.id, { title: eT.trim(), description: eD.trim(), deadline: eDl || null }); setEditing(false); };
@@ -228,7 +350,7 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, pr
   const visible = isDone && !showAll ? sorted.slice(0, 5) : sorted;
   const hidden = isDone ? sorted.length - visible.length : 0;
   return (
-    <div style={{ flex: 1, minWidth: 230, display: "flex", flexDirection: "column", height: "100%", background: COL_BG[name], borderRadius: 10, padding: "0 0 6px", overflow: "hidden" }}>
+    <div style={{ flex: 1, minWidth: 230, display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 150px)", background: COL_BG[name], borderRadius: 10, padding: "0 0 6px", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "12px 12px 9px", borderBottom: `2px solid ${COL_ACCENT[name]}20`, flexShrink: 0 }}>
         <div style={{ width: 9, height: 9, borderRadius: 3, background: COL_ACCENT[name] }} />
         <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0f172a" }}>{name}</span>
@@ -258,27 +380,19 @@ function App() {
   const [prioritizing, setPrioritizing] = useState(false);
   const [banner, setBanner] = useState(null);
 
-  // Collect all known tags from tasks
   const allTags = [...new Set(tasks.flatMap(t => t.tags || []))];
 
-  // Load tasks on mount
-  useEffect(() => {
-    fetchTasks();
-  }, []);
-
-  // Show profile modal on first use
-  useEffect(() => {
-    if (!loading && !profile) setShowProfile(true);
-  }, [loading, profile]);
+  useEffect(() => { fetchTasks(); }, []);
+  useEffect(() => { if (!loading && !profile) setShowProfile(true); }, [loading, profile]);
 
   async function fetchTasks() {
-    setLoading(true);
-    setLoadError(null);
+    setLoading(true); setLoadError(null);
     try {
       const data = await api("/api/tasks");
       setTasks(data.tasks || []);
     } catch (e) {
-      setLoadError(e.message);
+      // 401 is handled inside api() — só registra outros erros
+      if (!e.message.includes("expirada")) setLoadError(e.message);
     }
     setLoading(false);
   }
@@ -287,124 +401,55 @@ function App() {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...changes } : t));
   }
 
-  /* ── Handlers ── */
-
   async function handleAdd({ title, description, deadline }) {
     setProcessing("new");
     try {
-      // 1. Polish via AI (best-effort)
       let polished = null;
-      try {
-        polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, profile } });
-      } catch { /* AI optional — proceed without */ }
-
-      // 2. Create in Notion
-      const taskData = {
-        title: polished?.title || title,
-        description: polished?.description || description,
-        tags: polished?.tags || [],
-        deadline,
-        column: "Backlog",
-        createdAt: new Date().toISOString(),
-      };
+      try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, profile } }); } catch {}
+      const taskData = { title: polished?.title || title, description: polished?.description || description, tags: polished?.tags || [], deadline, column: "Backlog", createdAt: new Date().toISOString() };
       const data = await api("/api/tasks", { method: "POST", body: taskData });
       setTasks(prev => [...prev, data.task]);
-    } catch (e) {
-      setBanner({ type: "error", msg: "Erro ao criar tarefa", detail: e.message });
-    }
+    } catch (e) { setBanner({ type: "error", msg: "Erro ao criar tarefa", detail: e.message }); }
     setProcessing(null);
   }
 
   async function handleMove(id, target) {
-    const task = tasks.find(t => t.id === id);
-    if (!task) return;
-
+    const task = tasks.find(t => t.id === id); if (!task) return;
     const changes = { column: target };
     if (target === "Em andamento" && !task.startedAt) changes.startedAt = new Date().toISOString();
-    if (target === "Concluído") {
-      changes.completedAt = new Date().toISOString();
-      changes.duration = calcDuration(task.startedAt || task.createdAt, changes.completedAt);
-    }
-    if (task.column === "Concluído" && target !== "Concluído") {
-      changes.completedAt = null;
-      changes.duration = null;
-    }
-
-    // Optimistic update
+    if (target === "Concluído") { changes.completedAt = new Date().toISOString(); changes.duration = calcDuration(task.startedAt || task.createdAt, changes.completedAt); }
+    if (task.column === "Concluído" && target !== "Concluído") { changes.completedAt = null; changes.duration = null; }
     updateLocal(id, changes);
-
-    try {
-      await api(`/api/tasks/${id}`, { method: "PATCH", body: changes });
-    } catch (e) {
-      // Revert on failure
-      updateLocal(id, { column: task.column, startedAt: task.startedAt, completedAt: task.completedAt, duration: task.duration });
-      setBanner({ type: "error", msg: "Erro ao mover tarefa", detail: e.message });
-    }
+    try { await api(`/api/tasks/${id}`, { method: "PATCH", body: changes }); }
+    catch (e) { updateLocal(id, { column: task.column, startedAt: task.startedAt, completedAt: task.completedAt, duration: task.duration }); setBanner({ type: "error", msg: "Erro ao mover tarefa", detail: e.message }); }
   }
 
   async function handleEdit(id, { title, description, deadline }) {
-    setProcessing(id);
-    const task = tasks.find(t => t.id === id);
-    if (!task) { setProcessing(null); return; }
-
+    setProcessing(id); const task = tasks.find(t => t.id === id); if (!task) { setProcessing(null); return; }
     try {
-      // Polish
       let polished = null;
-      try {
-        polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, profile } });
-      } catch { /* AI optional */ }
-
-      const changes = {
-        title: polished?.title || title,
-        description: polished?.description || description,
-        tags: polished?.tags || task.tags,
-        deadline,
-        priority: null,
-        reason: "",
-      };
-
-      await api(`/api/tasks/${id}`, { method: "PATCH", body: changes });
-      updateLocal(id, changes);
-    } catch (e) {
-      setBanner({ type: "error", msg: "Erro ao editar tarefa", detail: e.message });
-    }
+      try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, profile } }); } catch {}
+      const changes = { title: polished?.title || title, description: polished?.description || description, tags: polished?.tags || task.tags, deadline, priority: null, reason: "" };
+      await api(`/api/tasks/${id}`, { method: "PATCH", body: changes }); updateLocal(id, changes);
+    } catch (e) { setBanner({ type: "error", msg: "Erro ao editar tarefa", detail: e.message }); }
     setProcessing(null);
   }
 
   async function handleImprove(id) {
-    setProcessing(id);
-    const task = tasks.find(t => t.id === id);
-    if (!task) { setProcessing(null); return; }
-
+    setProcessing(id); const task = tasks.find(t => t.id === id); if (!task) { setProcessing(null); return; }
     try {
       const polished = await api("/api/ai-polish", { method: "POST", body: { title: task.title, description: task.description, existingTags: allTags, profile } });
-      const changes = {
-        title: polished.title || task.title,
-        description: polished.description || task.description,
-        tags: polished.tags || task.tags,
-      };
-      await api(`/api/tasks/${id}`, { method: "PATCH", body: changes });
-      updateLocal(id, changes);
-    } catch (e) {
-      setBanner({ type: "error", msg: "Erro ao melhorar tarefa", detail: e.message });
-    }
+      const changes = { title: polished.title || task.title, description: polished.description || task.description, tags: polished.tags || task.tags };
+      await api(`/api/tasks/${id}`, { method: "PATCH", body: changes }); updateLocal(id, changes);
+    } catch (e) { setBanner({ type: "error", msg: "Erro ao melhorar tarefa", detail: e.message }); }
     setProcessing(null);
   }
 
   async function handleDelete(id) {
-    const task = tasks.find(t => t.id === id);
-    if (!task) return;
-
-    // Optimistic remove
+    const task = tasks.find(t => t.id === id); if (!task) return;
     setTasks(prev => prev.filter(t => t.id !== id));
-
-    try {
-      await api(`/api/tasks/${id}`, { method: "DELETE" });
-    } catch (e) {
-      // Revert
-      setTasks(prev => [...prev, task]);
-      setBanner({ type: "error", msg: "Erro ao arquivar tarefa", detail: e.message });
-    }
+    try { await api(`/api/tasks/${id}`, { method: "DELETE" }); }
+    catch (e) { setTasks(prev => [...prev, task]); setBanner({ type: "error", msg: "Erro ao arquivar tarefa", detail: e.message }); }
   }
 
   async function handlePrioritize() {
@@ -412,38 +457,19 @@ function App() {
     try {
       const active = tasks.filter(t => t.column !== "Concluído");
       if (!active.length) { setPrioritizing(false); return; }
-
       const data = await api("/api/ai-prioritize", { method: "POST", body: { tasks: active, profile } });
       const priorities = data.priorities || [];
-
       if (priorities.length) {
-        // Update local
-        const updated = tasks.map(t => {
-          const p = priorities.find(r => r.id === t.id);
-          return p ? { ...t, priority: p.priority, reason: p.reason } : t;
-        });
+        const updated = tasks.map(t => { const p = priorities.find(r => r.id === t.id); return p ? { ...t, priority: p.priority, reason: p.reason } : t; });
         setTasks(updated);
-
-        // Persist to Notion (fire-and-forget, batched)
-        for (const p of priorities) {
-          api(`/api/tasks/${p.id}`, { method: "PATCH", body: { priority: p.priority, reason: p.reason } }).catch(() => {});
-        }
-
+        for (const p of priorities) { api(`/api/tasks/${p.id}`, { method: "PATCH", body: { priority: p.priority, reason: p.reason } }).catch(() => {}); }
         setBanner({ type: "success", msg: `${priorities.length} tarefa(s) priorizadas` });
       }
-    } catch (e) {
-      setBanner({ type: "error", msg: "Erro ao priorizar", detail: e.message });
-    }
+    } catch (e) { setBanner({ type: "error", msg: "Erro ao priorizar", detail: e.message }); }
     setPrioritizing(false);
   }
 
-  function saveProfile(p) {
-    setProfile(p);
-    localStorage.setItem("cofit-profile", JSON.stringify(p));
-    setShowProfile(false);
-  }
-
-  /* ── Render ── */
+  function saveProfile(p) { setProfile(p); localStorage.setItem("cofit-profile", JSON.stringify(p)); setShowProfile(false); }
 
   if (loading) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "#64748b" }}>Carregando tarefas do Notion...</div>;
 
@@ -492,7 +518,15 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+// Expõe mountApp para o script de auth chamar
+window.mountApp = function() {
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+};
+
+// Se já tem token, monta direto; senão o script de auth vai chamar mountApp() após login
+if (window.AUTH_TOKEN) {
+  window.mountApp();
+}
 </script>
 </body>
 </html>
