@@ -1,12 +1,8 @@
-const requireAuth = require("./_auth"); // ou require("../_auth") no [id].js
+const requireAuth = require("./_auth");
+const { notionHeaders, databaseId, buildProperties, parsePage } = require("./_notion");
 
 export default async function handler(req, res) {
-  if (!requireAuth(req, res)) return; // bloqueia aqui se não autenticado
-  // ... resto do código
-
-  const { notionHeaders, databaseId, buildProperties, parsePage } = require("./_notion");
-
-export default async function handler(req, res) {
+  if (!requireAuth(req, res)) return;
   try {
     if (req.method === "GET") {
       // Fetch all tasks (paginated — Notion returns max 100 per call)
