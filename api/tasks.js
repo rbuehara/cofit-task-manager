@@ -1,0 +1,66 @@
+export default async function handler(req,res){
+
+const notionKey = process.env.NOTION_API_KEY
+
+const databaseId = process.env.NOTION_DATABASE_ID
+
+if(req.method==="GET"){
+
+const response = await fetch(
+`https://api.notion.com/v1/databases/${databaseId}/query`,
+{
+method:"POST",
+headers:{
+Authorization:`Bearer ${notionKey}`,
+"Notion-Version":"2022-06-28",
+"Content-Type":"application/json"
+}
+})
+
+const data = await response.json()
+
+res.status(200).json(data)
+
+}
+
+
+
+if(req.method==="POST"){
+
+const body = req.body
+
+await fetch("https://api.notion.com/v1/pages",{
+
+method:"POST",
+
+headers:{
+Authorization:`Bearer ${notionKey}`,
+"Notion-Version":"2022-06-28",
+"Content-Type":"application/json"
+},
+
+body:JSON.stringify({
+
+parent:{ database_id:databaseId },
+
+properties:{
+
+Name:{
+title:[
+{
+text:{content:body.title}
+}
+]
+}
+
+}
+
+})
+
+})
+
+res.status(200).json({status:"ok"})
+
+}
+
+}
