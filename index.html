@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>COFIT Task Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: 'DM Sans', sans-serif; background: #f4f5f7; min-height: 100vh; }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+button { cursor: pointer; font-family: inherit; }
+button:hover { filter: brightness(0.93); }
+input:focus, textarea:focus, select:focus { border-color: #4f46e5 !important; outline: none; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.card-wrap:hover .hover-actions { display: flex !important; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.2/babel.min.js"></script>
+
+<script type="text/babel" data-type="module">
+const { useState, useEffect, useCallback, useRef } = React;
+
+/* ── Constants ── */
+const COLUMNS = ["Backlog", "A fazer", "Em andamento", "Concluído"];
+const COL_BG = { Backlog: "rgba(100,116,139,0.07)", "A fazer": "rgba(59,130,246,0.07)", "Em andamento": "rgba(245,158,11,0.07)", Concluído: "rgba(16,185,129,0.07)" };
+const COL_ACCENT = { Backlog: "#64748b", "A fazer": "#3b82f6", "Em andamento": "#f59e0b", Concluído: "#10b981" };
+
+const TAG_COLORS = {
+  ITCD: { bg: "#dbeddb", text: "#1a7a2e", border: "#b8dbb8" },
+  IPVA: { bg: "#d3e5ef", text: "#24548d", border: "#a8cee0" },
+  "Gestão de equipe": { bg: "#e8deee", text: "#6b3fa0", border: "#d4bfe0" },
+  Administrativo: { bg: "#fadec9", text: "#9a6700", border: "#f0c9a0" },
+  Institucional: { bg: "#ffe2dd", text: "#c4554d", border: "#f5c4bf" },
+  "Sistemas/TI": { bg: "#fdecc8", text: "#9b6a12", border: "#f0d8a0" },
+  Outro: { bg: "#e3e2e0", text: "#55534e", border: "#d0cfcc" },
+};
+const DEFAULT_TAG_COLOR = { bg: "#e8e8ff", text: "#5b5fc7", border: "#c8c8f0" };
+const getTagColor = (tag) => TAG_COLORS[tag] || DEFAULT_TAG_COLOR;
+
+/* ── Helpers ── */
+const fmtDate = (iso) => { if (!iso) return "—"; try { return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
+const fmtDateShort = (iso) => { if (!iso) return "—"; try { return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); } catch { return iso; } };
+const isOverdue = (dl, col) => dl && col !== "Concluído" && new Date(dl) < new Date();
+const calcDuration = (s, e) => { if (!s || !e) return null; const ms = new Date(e) - new Date(s); if (ms < 0) return null; const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000); return h > 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${h}h ${m}min`; };
+
+/* ── API calls ── */
+async function api(path, opts = {}) {
+  const r = await fetch(path, {
+    ...opts,
+    headers: { "Content-Type": "application/json", ...opts.headers },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+
+/* ── Styles ── */
+const inp = { width: "100%", padding: "7px 9px", borderRadius: 6, border: "1.5px solid #e2e8f0", fontSize: 12.5, fontFamily: "inherit", outline: "none", boxSizing: "border-box", background: "#fff", color: "#1e293b" };
+const lbl = { display: "block", fontSize: 11.5, fontWeight: 600, color: "#475569", marginBottom: 4, marginTop: 12 };
+const btnP = { padding: "7px 16px", borderRadius: 6, border: "none", background: "#4f46e5", color: "#fff", fontWeight: 600, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" };
+const btnG = { padding: "7px 12px", borderRadius: 6, border: "1.5px solid #e2e8f0", background: "transparent", color: "#64748b", fontWeight: 500, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" };
+const btnS = { padding: "3px 8px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 10.5, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 };
+const cardBase = (accent) => ({ background: "#fff", borderRadius: 7, boxShadow: "0 1px 2px rgba(0,0,0,0.04)", borderLeft: `3px solid ${accent}`, overflow: "hidden" });
+
+/* ── Components ── */
+
+function TagChip({ tag, small }) {
+  const c = getTagColor(tag);
+  return <span style={{ display: "inline-block", padding: small ? "1px 5px" : "2px 7px", borderRadius: 4, fontSize: small ? 9.5 : 11, fontWeight: 600, background: c.bg, color: c.text, border: `1px solid ${c.border}`, lineHeight: 1.5, whiteSpace: "nowrap" }}>{tag}</span>;
+}
+
+function Banner({ status, onDismiss }) {
+  if (!status) return null;
+  const isErr = status.type === "error";
+  const bg = isErr ? "#fef2f2" : status.type === "success" ? "#f0fdf4" : "#eff6ff";
+  const border = isErr ? "#fca5a5" : status.type === "success" ? "#86efac" : "#93c5fd";
+  const color = isErr ? "#991b1b" : status.type === "success" ? "#166534" : "#1e40af";
+  const icon = status.type === "syncing" ? "🔄" : isErr ? "⚠️" : "✅";
+  return (
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "8px 14px", margin: "0 0 10px", animation: "fadeIn 0.2s ease", fontSize: 12, color }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ display: "inline-block", animation: status.type === "syncing" ? "spin 1s linear infinite" : "none", flexShrink: 0 }}>{icon}</span>
+        <span style={{ flex: 1, lineHeight: 1.4, fontWeight: 600 }}>{status.msg}</span>
+        {status.type !== "syncing" && <button onClick={onDismiss} style={{ border: "none", background: "transparent", color: "#94a3b8", cursor: "pointer", fontSize: 14, padding: "0 2px", lineHeight: 1 }}>✕</button>}
+      </div>
+      {status.detail && <div style={{ fontSize: 10.5, color: isErr ? "#7f1d1d" : "#64748b", marginTop: 4, lineHeight: 1.5, wordBreak: "break-all", maxHeight: 80, overflowY: "auto", background: isErr ? "rgba(0,0,0,0.03)" : "transparent", borderRadius: 4, padding: isErr ? "4px 6px" : 0, fontFamily: isErr ? "monospace" : "inherit" }}>{status.detail}</div>}
+    </div>
+  );
+}
+
+function ProfileModal({ onSave, initial, onClose }) {
+  const [role, setRole] = useState(initial?.role || "");
+  const [areas, setAreas] = useState(initial?.areas || "");
+  const [crit, setCrit] = useState(initial?.criterion || "");
+  const ok = role && areas && crit;
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(6px)" }}>
+      <div style={{ background: "#fff", borderRadius: 14, padding: "28px 24px", maxWidth: 420, width: "92%", boxShadow: "0 20px 40px rgba(0,0,0,0.18)" }}>
+        <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Perfil</h2>
+        <p style={{ margin: "0 0 18px", fontSize: 12, color: "#64748b" }}>Usado pela IA para priorizar melhor.</p>
+        <label style={lbl}>Cargo</label>
+        <select value={role} onChange={e => setRole(e.target.value)} style={inp}><option value="">Selecione...</option>{["Coordenador","Gestor","Auditor","Analista","Executor","Assessor"].map(o => <option key={o}>{o}</option>)}</select>
+        <label style={lbl}>Áreas</label>
+        <textarea value={areas} onChange={e => setAreas(e.target.value)} placeholder="Ex: ITCD, IPVA, gestão de equipe..." rows={2} style={{ ...inp, resize: "vertical" }} />
+        <label style={lbl}>Critério dominante</label>
+        <select value={crit} onChange={e => setCrit(e.target.value)} style={inp}><option value="">Selecione...</option>{["Prazo legal / regulatório","Impacto institucional / político","Volume operacional","Desenvolvimento de equipe","Entrega de projetos"].map(o => <option key={o}>{o}</option>)}</select>
+        <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+          {initial && <button onClick={onClose} style={{ ...btnG, flex: 1 }}>Cancelar</button>}
+          <button onClick={() => ok && onSave({ role, areas, criterion: crit })} disabled={!ok} style={{ ...btnP, flex: 1, opacity: ok ? 1 : 0.4 }}>Salvar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddForm({ onAdd, busy }) {
+  const [title, setTitle] = useState(""); const [desc, setDesc] = useState(""); const [dl, setDl] = useState(""); const [open, setOpen] = useState(false);
+  const submit = () => { if (!title.trim() || busy) return; onAdd({ title: title.trim(), description: desc.trim(), deadline: dl || null }); setTitle(""); setDesc(""); setDl(""); setOpen(false); };
+  if (!open) return <button onClick={() => setOpen(true)} style={{ ...btnP, fontSize: 12, padding: "7px 14px" }}>+ Nova tarefa</button>;
+  return (
+    <div style={{ background: "#fff", borderRadius: 10, padding: 14, boxShadow: "0 2px 10px rgba(0,0,0,0.07)", marginBottom: 10 }}>
+      <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título..." onKeyDown={e => e.key === "Enter" && submit()} style={{ ...inp, fontWeight: 600, marginBottom: 5 }} autoFocus />
+      <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descrição..." rows={2} style={{ ...inp, resize: "vertical", marginBottom: 5 }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, color: "#64748b" }}>Prazo:</span>
+        <input type="date" value={dl} onChange={e => setDl(e.target.value)} style={{ ...inp, width: "auto", padding: "4px 7px", fontSize: 11 }} />
+        <div style={{ flex: 1 }} />
+        <button onClick={() => setOpen(false)} style={btnG}>Cancelar</button>
+        <button onClick={submit} disabled={!title.trim() || busy} style={{ ...btnP, opacity: !title.trim() || busy ? 0.5 : 1 }}>{busy ? "..." : "Adicionar"}</button>
+      </div>
+    </div>
+  );
+}
+
+function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, processing }) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [eT, setET] = useState(task.title);
+  const [eD, setED] = useState(task.description);
+  const [eDl, setEDl] = useState(task.deadline || "");
+  const isProc = processing === task.id;
+  const overdue = isOverdue(task.deadline, task.column);
+  const isDone = task.column === "Concluído";
+
+  // Reset form when task changes externally
+  useEffect(() => { setET(task.title); setED(task.description); setEDl(task.deadline || ""); }, [task.title, task.description, task.deadline]);
+
+  const save = () => { if (!eT.trim()) return; onEdit(task.id, { title: eT.trim(), description: eD.trim(), deadline: eDl || null }); setEditing(false); };
+
+  const priBadge = task.priority ? (
+    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 20, height: 20, borderRadius: "50%", fontSize: 10, fontWeight: 700,
+      background: task.priority <= 2 ? "#fef2f2" : task.priority <= 4 ? "#fffbeb" : "#f0fdf4",
+      color: task.priority <= 2 ? "#dc2626" : task.priority <= 4 ? "#d97706" : "#16a34a",
+      border: `1.5px solid ${task.priority <= 2 ? "#fca5a5" : task.priority <= 4 ? "#fcd34d" : "#86efac"}`, flexShrink: 0 }}>{task.priority}</span>
+  ) : null;
+
+  if (editing) return (
+    <div style={{ ...cardBase(COL_ACCENT[task.column]), padding: 12 }}>
+      <input value={eT} onChange={e => setET(e.target.value)} style={{ ...inp, fontWeight: 600, fontSize: 12, marginBottom: 5 }} autoFocus />
+      <textarea value={eD} onChange={e => setED(e.target.value)} rows={3} style={{ ...inp, fontSize: 11, resize: "vertical", marginBottom: 5 }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 7 }}><span style={{ fontSize: 10, color: "#94a3b8" }}>Prazo:</span><input type="date" value={eDl} onChange={e => setEDl(e.target.value)} style={{ ...inp, width: "auto", padding: "3px 5px", fontSize: 10 }} /></div>
+      <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
+        <button onClick={() => { setET(task.title); setED(task.description); setEDl(task.deadline || ""); setEditing(false); }} style={{ ...btnS, background: "#f1f5f9" }}>Cancelar</button>
+        <button onClick={save} style={{ ...btnS, background: "#4f46e5", color: "#fff" }}>Salvar</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="card-wrap" style={{ ...cardBase(COL_ACCENT[task.column]), opacity: isProc ? 0.5 : isDone ? 0.72 : 1, position: "relative", borderLeftColor: overdue ? "#ef4444" : COL_ACCENT[task.column], transition: "all 0.2s" }}>
+      {isProc && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.8)", borderRadius: 8, zIndex: 2 }}><span style={{ fontSize: 11, color: "#4f46e5", fontWeight: 600 }}>Processando...</span></div>}
+      <div onClick={() => setOpen(!open)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 10px", cursor: "pointer" }}>
+        {priBadge}
+        <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: "#1e293b", lineHeight: 1.35 }}>{task.title}</span>
+        {overdue && <span style={{ fontSize: 11, flexShrink: 0 }} title="Prazo vencido">🔴</span>}
+        <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }}>▾</span>
+      </div>
+      {(task.tags?.length > 0 || task.deadline) && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 3, padding: "0 10px 7px" }}>
+          {(task.tags || []).map(t => <TagChip key={t} tag={t} small />)}
+          {task.deadline && !open && <span style={{ fontSize: 9.5, color: overdue ? "#dc2626" : "#64748b", fontWeight: 500, padding: "1px 5px", background: overdue ? "#fef2f2" : "#f8fafc", borderRadius: 3, border: `1px solid ${overdue ? "#fca5a5" : "#e2e8f0"}` }}>📅 {fmtDateShort(task.deadline)}</span>}
+        </div>
+      )}
+      {open && (
+        <div style={{ padding: "0 10px 10px", borderTop: "1px solid #f1f5f9", animation: "fadeIn 0.15s ease" }}>
+          {task.description && <p style={{ fontSize: 11.5, color: "#475569", margin: "8px 0 6px", lineHeight: 1.55 }}>{task.description}</p>}
+          {task.reason && <p style={{ fontSize: 10.5, color: "#94a3b8", margin: "0 0 6px", fontStyle: "italic" }}>💡 {task.reason}</p>}
+          {isDone && task.duration && <p style={{ fontSize: 10.5, color: "#10b981", margin: "0 0 5px" }}>⏱ {task.duration}</p>}
+          <div style={{ fontSize: 9.5, color: "#94a3b8", display: "flex", flexWrap: "wrap", gap: "3px 10px", marginBottom: 8 }}>
+            <span>Criado: {fmtDate(task.createdAt)}</span>
+            {task.startedAt && <span>Início: {fmtDate(task.startedAt)}</span>}
+            {task.completedAt && <span>Concluído: {fmtDate(task.completedAt)}</span>}
+            {task.deadline && <span>Prazo: {fmtDateShort(task.deadline)}</span>}
+          </div>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {colIndex > 0 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex - 1]); }} style={btnS}>← {COLUMNS[colIndex - 1].split(" ").pop()}</button>}
+            {colIndex < 3 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex + 1]); }} style={btnS}>{COLUMNS[colIndex + 1].split(" ").pop()} →</button>}
+            <div style={{ flex: 1 }} />
+            <button onClick={e => { e.stopPropagation(); onImprove(task.id); }} style={{ ...btnS, color: "#4f46e5" }} title="Melhorar com IA">✨</button>
+            <button onClick={e => { e.stopPropagation(); setEditing(true); }} style={{ ...btnS, color: "#3b82f6" }}>✏️</button>
+            <button onClick={e => { e.stopPropagation(); if(confirm("Arquivar esta tarefa no Notion?")) onDelete(task.id); }} style={{ ...btnS, color: "#ef4444" }} title="Arquiva no Notion">🗑</button>
+          </div>
+        </div>
+      )}
+      {!open && <div className="hover-actions" style={{ position: "absolute", right: 6, top: 7, display: "none", gap: 2 }}>
+        {colIndex > 0 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex - 1]); }} style={{ ...btnS, padding: "2px 5px", fontSize: 9 }}>←</button>}
+        {colIndex < 3 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex + 1]); }} style={{ ...btnS, padding: "2px 5px", fontSize: 9 }}>→</button>}
+      </div>}
+    </div>
+  );
+}
+
+function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, processing }) {
+  const [showAll, setShowAll] = useState(false);
+  const isDone = name === "Concluído";
+  const sorted = [...tasks].sort((a, b) => (a.priority || 999) - (b.priority || 999));
+  const visible = isDone && !showAll ? sorted.slice(0, 5) : sorted;
+  const hidden = isDone ? sorted.length - visible.length : 0;
+  return (
+    <div style={{ flex: 1, minWidth: 230, display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 150px)", background: COL_BG[name], borderRadius: 10, padding: "0 0 6px", overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "12px 12px 9px", borderBottom: `2px solid ${COL_ACCENT[name]}20`, flexShrink: 0 }}>
+        <div style={{ width: 9, height: 9, borderRadius: 3, background: COL_ACCENT[name] }} />
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0f172a" }}>{name}</span>
+        <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>{tasks.length}</span>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "7px 6px 3px", display: "flex", flexDirection: "column", gap: 5 }}>
+        {visible.map(t => <TaskCard key={t.id} task={t} colIndex={colIndex} onMove={onMove} onEdit={onEdit} onDelete={onDelete} onImprove={onImprove} processing={processing} />)}
+        {!tasks.length && <p style={{ fontSize: 11, color: "#cbd5e1", textAlign: "center", padding: 20 }}>Nenhuma tarefa</p>}
+        {hidden > 0 && <button onClick={() => setShowAll(true)} style={{ ...btnG, fontSize: 10, padding: "5px 0", textAlign: "center", width: "100%", border: "1px dashed #cbd5e1" }}>+ {hidden} anterior{hidden > 1 ? "es" : ""}</button>}
+        {isDone && showAll && sorted.length > 5 && <button onClick={() => setShowAll(false)} style={{ ...btnG, fontSize: 10, padding: "5px 0", textAlign: "center", width: "100%", border: "1px dashed #cbd5e1" }}>Mostrar menos</button>}
+      </div>
+    </div>
+  );
+}
+
+/* ── Main App ── */
+
+function App() {
+  const [tasks, setTasks] = useState([]);
+  const [profile, setProfile] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("cofit-profile")); } catch { return null; }
+  });
+  const [showProfile, setShowProfile] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [processing, setProcessing] = useState(null);
+  const [prioritizing, setPrioritizing] = useState(false);
+  const [banner, setBanner] = useState(null);
+
+  // Collect all known tags from tasks
+  const allTags = [...new Set(tasks.flatMap(t => t.tags || []))];
+
+  // Load tasks on mount
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  // Show profile modal on first use
+  useEffect(() => {
+    if (!loading && !profile) setShowProfile(true);
+  }, [loading, profile]);
+
+  async function fetchTasks() {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await api("/api/tasks");
+      setTasks(data.tasks || []);
+    } catch (e) {
+      setLoadError(e.message);
+    }
+    setLoading(false);
+  }
+
+  function updateLocal(id, changes) {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...changes } : t));
+  }
+
+  /* ── Handlers ── */
+
+  async function handleAdd({ title, description, deadline }) {
+    setProcessing("new");
+    try {
+      // 1. Polish via AI (best-effort)
+      let polished = null;
+      try {
+        polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, profile } });
+      } catch { /* AI optional — proceed without */ }
+
+      // 2. Create in Notion
+      const taskData = {
+        title: polished?.title || title,
+        description: polished?.description || description,
+        tags: polished?.tags || [],
+        deadline,
+        column: "Backlog",
+        createdAt: new Date().toISOString(),
+      };
+      const data = await api("/api/tasks", { method: "POST", body: taskData });
+      setTasks(prev => [...prev, data.task]);
+    } catch (e) {
+      setBanner({ type: "error", msg: "Erro ao criar tarefa", detail: e.message });
+    }
+    setProcessing(null);
+  }
+
+  async function handleMove(id, target) {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+
+    const changes = { column: target };
+    if (target === "Em andamento" && !task.startedAt) changes.startedAt = new Date().toISOString();
+    if (target === "Concluído") {
+      changes.completedAt = new Date().toISOString();
+      changes.duration = calcDuration(task.startedAt || task.createdAt, changes.completedAt);
+    }
+    if (task.column === "Concluído" && target !== "Concluído") {
+      changes.completedAt = null;
+      changes.duration = null;
+    }
+
+    // Optimistic update
+    updateLocal(id, changes);
+
+    try {
+      await api(`/api/tasks/${id}`, { method: "PATCH", body: changes });
+    } catch (e) {
+      // Revert on failure
+      updateLocal(id, { column: task.column, startedAt: task.startedAt, completedAt: task.completedAt, duration: task.duration });
+      setBanner({ type: "error", msg: "Erro ao mover tarefa", detail: e.message });
+    }
+  }
+
+  async function handleEdit(id, { title, description, deadline }) {
+    setProcessing(id);
+    const task = tasks.find(t => t.id === id);
+    if (!task) { setProcessing(null); return; }
+
+    try {
+      // Polish
+      let polished = null;
+      try {
+        polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, profile } });
+      } catch { /* AI optional */ }
+
+      const changes = {
+        title: polished?.title || title,
+        description: polished?.description || description,
+        tags: polished?.tags || task.tags,
+        deadline,
+        priority: null,
+        reason: "",
+      };
+
+      await api(`/api/tasks/${id}`, { method: "PATCH", body: changes });
+      updateLocal(id, changes);
+    } catch (e) {
+      setBanner({ type: "error", msg: "Erro ao editar tarefa", detail: e.message });
+    }
+    setProcessing(null);
+  }
+
+  async function handleImprove(id) {
+    setProcessing(id);
+    const task = tasks.find(t => t.id === id);
+    if (!task) { setProcessing(null); return; }
+
+    try {
+      const polished = await api("/api/ai-polish", { method: "POST", body: { title: task.title, description: task.description, existingTags: allTags, profile } });
+      const changes = {
+        title: polished.title || task.title,
+        description: polished.description || task.description,
+        tags: polished.tags || task.tags,
+      };
+      await api(`/api/tasks/${id}`, { method: "PATCH", body: changes });
+      updateLocal(id, changes);
+    } catch (e) {
+      setBanner({ type: "error", msg: "Erro ao melhorar tarefa", detail: e.message });
+    }
+    setProcessing(null);
+  }
+
+  async function handleDelete(id) {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+
+    // Optimistic remove
+    setTasks(prev => prev.filter(t => t.id !== id));
+
+    try {
+      await api(`/api/tasks/${id}`, { method: "DELETE" });
+    } catch (e) {
+      // Revert
+      setTasks(prev => [...prev, task]);
+      setBanner({ type: "error", msg: "Erro ao arquivar tarefa", detail: e.message });
+    }
+  }
+
+  async function handlePrioritize() {
+    setPrioritizing(true);
+    try {
+      const active = tasks.filter(t => t.column !== "Concluído");
+      if (!active.length) { setPrioritizing(false); return; }
+
+      const data = await api("/api/ai-prioritize", { method: "POST", body: { tasks: active, profile } });
+      const priorities = data.priorities || [];
+
+      if (priorities.length) {
+        // Update local
+        const updated = tasks.map(t => {
+          const p = priorities.find(r => r.id === t.id);
+          return p ? { ...t, priority: p.priority, reason: p.reason } : t;
+        });
+        setTasks(updated);
+
+        // Persist to Notion (fire-and-forget, batched)
+        for (const p of priorities) {
+          api(`/api/tasks/${p.id}`, { method: "PATCH", body: { priority: p.priority, reason: p.reason } }).catch(() => {});
+        }
+
+        setBanner({ type: "success", msg: `${priorities.length} tarefa(s) priorizadas` });
+      }
+    } catch (e) {
+      setBanner({ type: "error", msg: "Erro ao priorizar", detail: e.message });
+    }
+    setPrioritizing(false);
+  }
+
+  function saveProfile(p) {
+    setProfile(p);
+    localStorage.setItem("cofit-profile", JSON.stringify(p));
+    setShowProfile(false);
+  }
+
+  /* ── Render ── */
+
+  if (loading) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "#64748b" }}>Carregando tarefas do Notion...</div>;
+
+  if (loadError) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", color: "#64748b", gap: 12, padding: 20, textAlign: "center" }}>
+      <span style={{ fontSize: 32 }}>⚠️</span>
+      <p style={{ fontSize: 14, fontWeight: 600, color: "#991b1b" }}>Erro ao carregar tarefas</p>
+      <p style={{ fontSize: 12, color: "#64748b", maxWidth: 400, fontFamily: "monospace" }}>{loadError}</p>
+      <button onClick={fetchTasks} style={btnP}>Tentar novamente</button>
+    </div>
+  );
+
+  const byCols = COLUMNS.map(c => tasks.filter(t => t.column === c));
+  const activeN = tasks.filter(t => t.column !== "Concluído").length;
+  const doingN = byCols[2].length;
+  const doneToday = byCols[3].filter(t => t.completedAt && new Date(t.completedAt).toDateString() === new Date().toDateString()).length;
+
+  return (
+    <div>
+      {showProfile && <ProfileModal onSave={saveProfile} initial={profile} onClose={profile ? () => setShowProfile(false) : undefined} />}
+      <header style={{ background: "#0f172a", color: "#fff", padding: "10px 18px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.5px" }}>COFIT</span>
+        <span style={{ fontSize: 11, color: "#475569" }}>Task Manager</span>
+        <div style={{ display: "flex", gap: 10, fontSize: 11, color: "#94a3b8", marginLeft: 6 }}>
+          <span><b style={{ color: "#60a5fa" }}>{activeN}</b> ativa{activeN !== 1 ? "s" : ""}</span>
+          <span><b style={{ color: "#fbbf24" }}>{doingN}</b> em andamento</span>
+          <span><b style={{ color: "#34d399" }}>{doneToday}</b> concluída{doneToday !== 1 ? "s" : ""} hoje</span>
+        </div>
+        <div style={{ flex: 1 }} />
+        <button onClick={fetchTasks} title="Recarregar do Notion" style={{ padding: "4px 10px", borderRadius: 5, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "#94a3b8", fontSize: 10, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }}>
+          <span>🔄</span><span style={{ fontWeight: 600 }}>Recarregar</span>
+        </button>
+        <button onClick={() => setShowProfile(true)} style={{ padding: "4px 8px", borderRadius: 5, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "#475569", fontSize: 12 }}>⚙️</button>
+      </header>
+      <div style={{ padding: "12px 16px", maxWidth: 1320, margin: "0 auto" }}>
+        <Banner status={banner} onDismiss={() => setBanner(null)} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+          <AddForm onAdd={handleAdd} busy={processing === "new"} />
+          <button onClick={handlePrioritize} disabled={prioritizing || !activeN} style={{ ...btnP, background: "#1e40af", fontSize: 12, padding: "7px 14px", opacity: prioritizing || !activeN ? 0.5 : 1 }}>⚡ {prioritizing ? "..." : "Priorizar"}</button>
+        </div>
+        <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+          {COLUMNS.map((col, i) => <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} processing={processing} />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
