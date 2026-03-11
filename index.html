@@ -28,28 +28,29 @@ onclick="createTask()"
 class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
 >
 Criar tarefa
-<div class="grid grid-cols-4 gap-4 mt-6">
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mt-6">
 
-<div>
-<h2 class="font-bold mb-2">Backlog</h2>
+<div class="bg-gray-100 rounded-lg p-4">
+<h2 class="font-bold mb-4 text-gray-700">Backlog</h2>
 <div id="col-backlog" class="space-y-3"></div>
 </div>
 
-<div>
-<h2 class="font-bold mb-2">A fazer</h2>
+<div class="bg-blue-50 rounded-lg p-4">
+<h2 class="font-bold mb-4 text-blue-700">A fazer</h2>
 <div id="col-todo" class="space-y-3"></div>
 </div>
 
-<div>
-<h2 class="font-bold mb-2">Em andamento</h2>
+<div class="bg-yellow-50 rounded-lg p-4">
+<h2 class="font-bold mb-4 text-yellow-700">Em andamento</h2>
 <div id="col-progress" class="space-y-3"></div>
 </div>
 
-<div>
-<h2 class="font-bold mb-2">Concluído</h2>
+<div class="bg-green-50 rounded-lg p-4">
+<h2 class="font-bold mb-4 text-green-700">Concluído</h2>
 <div id="col-done" class="space-y-3"></div>
 </div>
 
+</div>
 </div>
 Sincronizar Notion
 </button>
@@ -65,4 +66,5 @@ Sincronizar Notion
 
 </body>
 </html>
+
 
