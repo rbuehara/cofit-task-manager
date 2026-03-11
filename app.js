@@ -45,7 +45,7 @@ task.properties["Status"]?.select?.name || "Backlog"
 const card = document.createElement("div")
 
 card.className =
-"bg-white rounded-lg shadow border hover:shadow-md transition cursor-pointer"
+"bg-white rounded-lg shadow border p-4 hover:shadow-md transition w-full"
 
 card.innerHTML = `
 
@@ -169,3 +169,4 @@ loadTasks()
 document.addEventListener("DOMContentLoaded", () => {
 loadTasks()
 })
+
