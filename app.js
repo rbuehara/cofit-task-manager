@@ -1,7 +1,6 @@
 async function loadTasks(){
 
 const res = await fetch("/api/tasks")
-
 const data = await res.json()
 
 const container = document.getElementById("tasks")
@@ -10,13 +9,21 @@ container.innerHTML = ""
 
 data.results.forEach(task => {
 
-const title = task.properties.Name.title[0]?.plain_text || "Sem título"
+const titleProperty = task.properties["Título"]
+
+let title = "Sem título"
+
+if(titleProperty && titleProperty.title.length > 0){
+title = titleProperty.title[0].plain_text
+}
 
 const div = document.createElement("div")
 
-div.className = "task"
+div.style.padding = "10px"
+div.style.margin = "10px"
+div.style.border = "1px solid #ccc"
 
-div.innerHTML = `<strong>${title}</strong>`
+div.innerHTML = title
 
 container.appendChild(div)
 
