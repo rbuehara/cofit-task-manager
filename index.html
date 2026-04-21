@@ -467,7 +467,6 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
 
       {open && (
         <div style={{ padding: "0 10px 10px", borderTop: "1px solid #f1f5f9", animation: "fadeIn 0.15s ease" }}>
-          {/* FIX: whiteSpace e wordBreak para texto longo não truncar */}
           {task.description && <p style={{ fontSize: 11.5, color: "#475569", margin: "8px 0 6px", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{task.description}</p>}
           {task.aguardando && <p style={{ fontSize: 10.5, color: "#8b5cf6", margin: "0 0 6px", fontWeight: 500, wordBreak: "break-word" }}>⏸ Aguardando: {task.aguardando}</p>}
           {task.reason && <p style={{ fontSize: 10.5, color: "#94a3b8", margin: "0 0 6px", fontStyle: "italic", wordBreak: "break-word" }}>💡 {task.reason}</p>}
@@ -478,9 +477,19 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
             {task.completedAt && <span>Concluído: {fmtDate(task.completedAt)}</span>}
             {task.deadline && <span>Prazo: {fmtDateShort(task.deadline)}</span>}
           </div>
+          {/* Mover para: todos os destinos possíveis exceto a coluna atual */}
+          <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 6 }}>
+            {COLUMNS.filter(c => c !== task.column).map(c => {
+              const acc = COL_ACCENT[c];
+              return (
+                <button key={c} onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
+                  style={{ ...btnS, color: acc, border: `1px solid ${acc}50`, background: `${acc}10`, fontWeight: 600, fontSize: 10 }}>
+                  {c}
+                </button>
+              );
+            })}
+          </div>
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {colIndex > 0 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex - 1]); }} style={btnS}>← {COLUMNS[colIndex - 1].split(" ").pop()}</button>}
-            {colIndex < COLUMNS.length - 1 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex + 1]); }} style={btnS}>{COLUMNS[colIndex + 1].split(" ").pop()} →</button>}
             <div style={{ flex: 1 }} />
             {!isDone && onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering} style={{ ...btnS, padding: "2px 7px", opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para cima">{reordering ? "⏳" : "↑"}</button>}
             {!isDone && onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering} style={{ ...btnS, padding: "2px 7px", opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para baixo">{reordering ? "⏳" : "↓"}</button>}
@@ -491,11 +500,13 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         </div>
       )}
 
-      {/* Inbox (colIndex=0): botões de destino + reordenação sempre visíveis no card fechado */}
+      {/* Inbox (colIndex=0): botões de triagem + reordenação sempre visíveis no card fechado */}
       {!open && !isNew && colIndex === 0 && (
-        <div style={{ display: "flex", gap: 4, padding: "0 10px 8px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 4, padding: "0 10px 8px", alignItems: "center", flexWrap: "wrap" }}>
           <button onClick={e => { e.stopPropagation(); onMove(task.id, "A fazer"); }} style={{ ...btnS, background: "#eff6ff", color: "#3b82f6", border: "1px solid #bfdbfe", fontWeight: 600 }}>A fazer</button>
           <button onClick={e => { e.stopPropagation(); onMove(task.id, "Em andamento"); }} style={{ ...btnS, background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a", fontWeight: 600 }}>Em andamento</button>
+          <button onClick={e => { e.stopPropagation(); onMove(task.id, "Aguardando"); }} style={{ ...btnS, background: "#f5f3ff", color: "#8b5cf6", border: "1px solid #ddd6fe", fontWeight: 600 }}>Aguardando</button>
+          <button onClick={e => { e.stopPropagation(); onMove(task.id, "Algum dia"); }} style={{ ...btnS, background: "#fdf2f8", color: "#ec4899", border: "1px solid #fbcfe8", fontWeight: 600 }}>Algum dia</button>
           <div style={{ flex: 1 }} />
           {onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering} style={{ ...btnS, padding: "2px 7px", opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para cima">{reordering ? "⏳" : "↑"}</button>}
           {onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering} style={{ ...btnS, padding: "2px 7px", opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para baixo">{reordering ? "⏳" : "↓"}</button>}
