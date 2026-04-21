@@ -112,7 +112,7 @@ Execução **uma mudança por entrega**, Rodrigo testa antes da próxima. Rodrig
 - **3.1c** ✅ `COLUMNS` expandido para 7 (inclui "Concluído" que só sai na 3.6). `COLLAPSIBLE_COLS` inclui "Concluído", "Aguardando", "Snooze", "Algum dia" — recolhidas por padrão. `COL_BG` e `COL_ACCENT` com cores para as 3 novas. Migração única de `localStorage` via flag `cofit-col-migrated`. Hardcodes `colIndex < 3` corrigidos para `COLUMNS.length - 1`. Clique para recolher coluna agora é na barra de título inteira (não só no botão `⟨`). Botões de destino unificados e dinâmicos nos três lugares: card novo, Inbox fechado e card expandido — todos usam `COLUMNS.filter(c => c !== task.column)`.
 - **3.2** ✅ Mover para "Aguardando" intercepta `handleMove`, abre `AguardandoModal` (textarea + Enter/Escape). Salva campo `Aguardando` (Rich text) no Notion via `buildProperties`/`parsePage`. Campo exibido em roxo no card fechado (badge truncado com tooltip) e no expandido. Limpo ao sair da coluna.
 - **3.3** ✅ Mover para "Snooze" intercepta `handleMove`, abre `SnoozeModal` (date picker, mínimo = amanhã). Salva campo `Snooze até` (Date) no Notion. GET em `tasks.js` reescrito: exclui Snooze com data futura; inclui Snooze com data vencida ou sem data (para a 3.4 processar). Campo exibido como badge "💤 até DD/MM" no card. Limpo ao sair da coluna.
-- **3.4** — Ao carregar, cards com `Status="Snooze"` e `Snooze até ≤ hoje` são automaticamente movidos para "Inbox" via PATCH.
+- **3.4** ✅ Ao carregar (`fetchTasks`), cards com `Status="Snooze"` e `Snooze até ≤ hoje` são automaticamente movidos para "Inbox" via PATCH. Vencidos entram no **topo do Inbox** (ordem temporária = 0, depois `renumberColumn` normaliza para 1..N) — força re-triagem visível. Renumera também os demais cards do Inbox para fechar/manter sequência. Limpa `snoozeUntil`. Decisão tomada na 3.4: **não criar campo "postergado em"**. Avaliar em ~60 dias se snooze virou muleta; se sim, considerar `snoozeCount` (contador de adiamentos), não timestamp.
 - **3.5** — Alerta visual (borda/ícone) em cards > 3 dias no Inbox.
 - **3.6** — Coluna "Concluído" some do grid; contador clicável no header abre popover das concluídas hoje.
 - **3.7** — Remover botão "Priorizar com IA" da UI principal.
@@ -133,7 +133,7 @@ Aplicação de nova identidade visual usando a ferramenta de design do Claude. S
 
 ## Estado atual / próxima sessão
 
-**Última etapa confirmada:** Fases 1, 2, 3.1a, 3.1b, 3.1c, 3.2 e 3.3 concluídas e validadas. Deploy funcionando via VS Code → GitHub → Vercel.
+**Última etapa confirmada:** Fases 1, 2, 3.1a, 3.1b, 3.1c, 3.2, 3.3 e 3.4 concluídas e validadas. Deploy funcionando via VS Code → GitHub → Vercel.
 
 **Pasta de trabalho:** `cofit-task-manager` (clonada via git). O Cowork está apontado para ela. A pasta `cofit-task-manager-main` é uma cópia OLD sem git — ignorar.
 
@@ -155,9 +155,8 @@ Aplicação de nova identidade visual usando a ferramenta de design do Claude. S
 
 **Próxima ação técnica (ao iniciar nova conversa):**
 
-Continuar **Fase 3** a partir de **3.4**, entrega por entrega:
+Continuar **Fase 3** a partir de **3.5**, entrega por entrega:
 
-- **3.4** — Ao carregar (`fetchTasks`), cards retornados com `Status="Snooze"` e `snoozeUntil ≤ hoje` devem ser movidos automaticamente para "Inbox" via PATCH (sem interação do usuário). Limpar `snoozeUntil` ao mover.
 - **3.5** — Alerta visual (borda laranja + ícone ⚠️) em cards com mais de 3 dias no Inbox (`createdAt` > 3 dias atrás e `column === "Inbox"`).
 - **3.6** — Coluna "Concluído" some do grid. Contador clicável no header abre popover listando as tarefas concluídas hoje (já disponíveis no `byCols[COL_IDX["Concluído"]]`).
 - **3.7** — Remover botão "Priorizar com IA" da UI principal. Limpar `handlePrioritize`, estado `prioritizing`, e referências ao campo `priority` que sobram no código.
