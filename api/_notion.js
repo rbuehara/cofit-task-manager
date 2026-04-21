@@ -35,6 +35,9 @@ function buildProperties(task) {
   if (task.priority !== undefined) {
     props["Prioridade"] = { number: task.priority || null };
   }
+  if (task.ordem !== undefined) {
+    props["Ordem"] = { number: task.ordem ?? null };
+  }
   if (task.reason !== undefined) {
     props["Justificativa IA"] = { rich_text: [{ text: { content: task.reason || "" } }] };
   }
@@ -79,6 +82,7 @@ function parsePage(page) {
     column: getSelect(p["Status"]) || "Inbox",
     tags: getMultiSelect(p["Categoria"]),
     priority: getNumber(p["Prioridade"]),
+    ordem: getNumber(p["Ordem"]),
     reason: getText(p["Justificativa IA"]),
     appId: getText(p["App ID"]),
     duration: getText(p["Tempo de execução"]),

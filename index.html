@@ -508,7 +508,7 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
   const sorted = [...tasks].sort((a, b) => {
     if (a.id === newCardId) return -1;
     if (b.id === newCardId) return 1;
-    return (a.priority || 999) - (b.priority || 999);
+    return (a.ordem ?? 999) - (b.ordem ?? 999);
   });
   const visible = isDone && !showAll ? sorted.slice(0, 5) : sorted;
   const hidden = isDone ? sorted.length - visible.length : 0;
@@ -642,7 +642,7 @@ function App() {
     const colTasks = [...tasks.filter(t => t.column === task.column)].sort((a, b) => {
       if (a.id === newCardId) return -1;
       if (b.id === newCardId) return 1;
-      return (a.priority || 999) - (b.priority || 999);
+      return (a.ordem ?? 999) - (b.ordem ?? 999);
     });
     const idx = colTasks.findIndex(t => t.id === id);
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
@@ -650,32 +650,32 @@ function App() {
 
     const neighbor = colTasks[swapIdx];
     // Atribui valores de ordem contíguos se ainda não existirem
-    const baseOrder = (i) => colTasks[i].priority ?? (i + 1) * 10;
+    const baseOrder = (i) => colTasks[i].ordem ?? (i + 1) * 10;
     const myOrder = baseOrder(idx);
     const neighborOrder = baseOrder(swapIdx);
 
-    // Troca os valores de priority entre os dois cards
+    // Troca os valores de ordem entre os dois cards
     const myNew = neighborOrder;
     const neighborNew = myOrder;
 
     // Atualiza local imediatamente (UX responsiva)
     setTasks(prev => prev.map(t => {
-      if (t.id === id) return { ...t, priority: myNew };
-      if (t.id === neighbor.id) return { ...t, priority: neighborNew };
+      if (t.id === id) return { ...t, ordem: myNew };
+      if (t.id === neighbor.id) return { ...t, ordem: neighborNew };
       return t;
     }));
 
     // Persiste no Notion em paralelo
     try {
       await Promise.all([
-        api(`/api/tasks/${id}`, { method: "PATCH", body: { priority: myNew } }),
-        api(`/api/tasks/${neighbor.id}`, { method: "PATCH", body: { priority: neighborNew } }),
+        api(`/api/tasks/${id}`, { method: "PATCH", body: { ordem: myNew } }),
+        api(`/api/tasks/${neighbor.id}`, { method: "PATCH", body: { ordem: neighborNew } }),
       ]);
     } catch (e) {
       // Reverte em caso de erro
       setTasks(prev => prev.map(t => {
-        if (t.id === id) return { ...t, priority: myOrder };
-        if (t.id === neighbor.id) return { ...t, priority: neighborOrder };
+        if (t.id === id) return { ...t, ordem: myOrder };
+        if (t.id === neighbor.id) return { ...t, ordem: neighborOrder };
         return t;
       }));
       setBanner({ type: "error", msg: "Erro ao reordenar", detail: e.message });
