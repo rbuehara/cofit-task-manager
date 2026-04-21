@@ -559,10 +559,20 @@ function App() {
   const [collapsedCols, setCollapsedCols] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("cofit-collapsed"));
-      if (!saved) return COLLAPSIBLE_COLS;
-      // Migração 3.1c: garante que as novas colunas recolhíveis estejam no array salvo
-      const merged = [...new Set([...saved, ...COLLAPSIBLE_COLS.filter(c => !["Concluído"].includes(c))])];
-      return merged;
+      if (!saved) {
+        // Primeira vez: recolhe todas as recolhíveis por padrão e marca migração feita
+        localStorage.setItem("cofit-col-migrated", "3.1c");
+        return COLLAPSIBLE_COLS;
+      }
+      // Migração 3.1c: roda uma única vez para adicionar as novas colunas ao estado salvo
+      if (!localStorage.getItem("cofit-col-migrated")) {
+        const merged = [...new Set([...saved, "Aguardando", "Snooze", "Algum dia"])];
+        localStorage.setItem("cofit-collapsed", JSON.stringify(merged));
+        localStorage.setItem("cofit-col-migrated", "3.1c");
+        return merged;
+      }
+      // Sessões subsequentes: respeita exatamente o que o usuário deixou salvo
+      return saved;
     } catch { return COLLAPSIBLE_COLS; }
   });
   const [showProfile, setShowProfile] = useState(false);
