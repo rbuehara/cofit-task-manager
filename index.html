@@ -157,10 +157,26 @@ if (!window.AUTH_TOKEN) {
 const { useState, useEffect, useCallback, useRef } = React;
 
 /* ── Constants ── */
-const COLUMNS = ["Inbox", "A fazer", "Em andamento", "Concluído"];
-const COLLAPSIBLE_COLS = ["Concluído"]; // colunas que podem ser recolhidas (Fase 1.2); mais virão na Fase 3
-const COL_BG = { Inbox: "rgba(100,116,139,0.07)", "A fazer": "rgba(59,130,246,0.07)", "Em andamento": "rgba(245,158,11,0.07)", Concluído: "rgba(16,185,129,0.07)" };
-const COL_ACCENT = { Inbox: "#64748b", "A fazer": "#3b82f6", "Em andamento": "#f59e0b", Concluído: "#10b981" };
+const COLUMNS = ["Inbox", "A fazer", "Em andamento", "Concluído", "Aguardando", "Snooze", "Algum dia"];
+const COLLAPSIBLE_COLS = ["Concluído", "Aguardando", "Snooze", "Algum dia"]; // recolhidas por padrão (Fase 3.1c)
+const COL_BG = {
+  Inbox:          "rgba(100,116,139,0.07)",
+  "A fazer":      "rgba(59,130,246,0.07)",
+  "Em andamento": "rgba(245,158,11,0.07)",
+  Concluído:      "rgba(16,185,129,0.07)",
+  Aguardando:     "rgba(139,92,246,0.07)",
+  Snooze:         "rgba(148,163,184,0.07)",
+  "Algum dia":    "rgba(236,72,153,0.07)",
+};
+const COL_ACCENT = {
+  Inbox:          "#64748b",
+  "A fazer":      "#3b82f6",
+  "Em andamento": "#f59e0b",
+  Concluído:      "#10b981",
+  Aguardando:     "#8b5cf6",
+  Snooze:         "#94a3b8",
+  "Algum dia":    "#ec4899",
+};
 const TAG_COLORS = {
   ITCD: { bg: "#dbeddb", text: "#1a7a2e", border: "#b8dbb8" },
   IPVA: { bg: "#d3e5ef", text: "#24548d", border: "#a8cee0" },
@@ -434,7 +450,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
           </div>
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
             {colIndex > 0 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex - 1]); }} style={btnS}>← {COLUMNS[colIndex - 1].split(" ").pop()}</button>}
-            {colIndex < 3 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex + 1]); }} style={btnS}>{COLUMNS[colIndex + 1].split(" ").pop()} →</button>}
+            {colIndex < COLUMNS.length - 1 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex + 1]); }} style={btnS}>{COLUMNS[colIndex + 1].split(" ").pop()} →</button>}
             <div style={{ flex: 1 }} />
             {!isDone && onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering} style={{ ...btnS, padding: "2px 7px", opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para cima">{reordering ? "⏳" : "↑"}</button>}
             {!isDone && onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering} style={{ ...btnS, padding: "2px 7px", opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para baixo">{reordering ? "⏳" : "↓"}</button>}
@@ -460,7 +476,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
       {!open && !isNew && colIndex > 0 && (
         <div className="hover-actions" style={{ position: "absolute", right: 6, top: 7, display: "none", gap: 2 }}>
           <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex - 1]); }} style={{ ...btnS, padding: "2px 5px", fontSize: 9 }}>←</button>
-          {colIndex < 3 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex + 1]); }} style={{ ...btnS, padding: "2px 5px", fontSize: 9 }}>→</button>}
+          {colIndex < COLUMNS.length - 1 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex + 1]); }} style={{ ...btnS, padding: "2px 5px", fontSize: 9 }}>→</button>}
           {onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering} style={{ ...btnS, padding: "2px 5px", fontSize: 9, opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para cima">{reordering ? "⏳" : "↑"}</button>}
           {onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering} style={{ ...btnS, padding: "2px 5px", fontSize: 9, opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para baixo">{reordering ? "⏳" : "↓"}</button>}
         </div>
@@ -541,7 +557,13 @@ function App() {
     try { return JSON.parse(localStorage.getItem("cofit-profile")); } catch { return null; }
   });
   const [collapsedCols, setCollapsedCols] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("cofit-collapsed")) || COLLAPSIBLE_COLS; } catch { return COLLAPSIBLE_COLS; }
+    try {
+      const saved = JSON.parse(localStorage.getItem("cofit-collapsed"));
+      if (!saved) return COLLAPSIBLE_COLS;
+      // Migração 3.1c: garante que as novas colunas recolhíveis estejam no array salvo
+      const merged = [...new Set([...saved, ...COLLAPSIBLE_COLS.filter(c => !["Concluído"].includes(c))])];
+      return merged;
+    } catch { return COLLAPSIBLE_COLS; }
   });
   const [showProfile, setShowProfile] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -792,9 +814,10 @@ function App() {
   );
 
   const byCols = COLUMNS.map(c => tasks.filter(t => t.column === c));
+  const COL_IDX = Object.fromEntries(COLUMNS.map((c, i) => [c, i])); // { Inbox:0, "A fazer":1, … }
   const activeN = tasks.filter(t => t.column !== "Concluído").length;
-  const doingN = byCols[2].length;
-  const doneToday = byCols[3].filter(t => t.completedAt && new Date(t.completedAt).toDateString() === new Date().toDateString()).length;
+  const doingN = byCols[COL_IDX["Em andamento"]].length;
+  const doneToday = byCols[COL_IDX["Concluído"]].filter(t => t.completedAt && new Date(t.completedAt).toDateString() === new Date().toDateString()).length;
 
   /* Colunas disponíveis no mobile: todas (incluindo as "recolhidas" no desktop, que no mobile entram no dropdown) */
   const mobileColName = COLUMNS[mobileCol] || COLUMNS[0];

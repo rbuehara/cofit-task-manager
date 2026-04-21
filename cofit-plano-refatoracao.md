@@ -107,13 +107,15 @@ Execução **uma mudança por entrega**, Rodrigo testa antes da próxima. Rodrig
 
 ### Fase 3 — Lógica das novas colunas
 
-- **3.1** Código renderiza 6 colunas; 3 recolhidas por padrão.
-- **3.2** Mover pra Aguardando abre mini-prompt ("aguardando o quê").
-- **3.3** Mover pra Snooze abre mini-prompt (data). Filtro no GET oculta `Snooze até > hoje`.
-- **3.4** Ao carregar o app, cards com Status="Snooze" e `Snooze até ≤ hoje` são automaticamente reatribuídos pra "Inbox".
-- **3.5** Alerta visual em cards > 3 dias no Inbox.
-- **3.6** Esconder coluna "Concluído"; contador clicável no header com popover das concluídas hoje.
-- **3.7** Remover botão "Priorizar" da UI principal.
+- **3.1a** ✅ Substituídas todas as ocorrências de "Backlog" por "Inbox" no código (`index.html` e `api/`).
+- **3.1b** ✅ Reordenação migrada de `priority`/`Prioridade` para `ordem`/`Ordem`. `buildProperties` e `parsePage` em `api/_notion.js` atualizados. Lógica de `handleReorder` reescrita: renumeração sequencial 1..N por coluna (abandona swap de valores). `handleMove` atualizado: atribui `ordem = N+1` no destino e renumera coluna origem. Helper `renumberColumn` criado. Flag `reorderingCol` bloqueia cliques concorrentes e exibe ⏳ nos botões ↑/↓. `priBadge` exibe `task.ordem` em cinza neutro. Persistência sempre envia PATCH para toda a coluna (sem diff otimizado) para garantir consistência com o Notion.
+- **3.1c** — Renderizar as 6 colunas no grid; adicionar `"Aguardando"`, `"Snooze"`, `"Algum dia"` ao `COLLAPSIBLE_COLS` (recolhidas por padrão).
+- **3.2** — Mover para "Aguardando" abre mini-prompt ("aguardando o quê?"); salva no campo `Aguardando` do Notion.
+- **3.3** — Mover para "Snooze" abre mini-prompt (data); salva em `Snooze até`. GET filtra cards com `Snooze até > hoje`.
+- **3.4** — Ao carregar, cards com `Status="Snooze"` e `Snooze até ≤ hoje` são automaticamente movidos para "Inbox" via PATCH.
+- **3.5** — Alerta visual (borda/ícone) em cards > 3 dias no Inbox.
+- **3.6** — Coluna "Concluído" some do grid; contador clicável no header abre popover das concluídas hoje.
+- **3.7** — Remover botão "Priorizar com IA" da UI principal.
 
 ### Fase 4 — Opcionais (decidir quando chegar)
 
@@ -131,7 +133,7 @@ Aplicação de nova identidade visual usando a ferramenta de design do Claude. S
 
 ## Estado atual / próxima sessão
 
-**Última etapa confirmada:** Fases 1 e 2 completas e validadas. Deploy funcionando via VS Code → GitHub → Vercel.
+**Última etapa confirmada:** Fases 1, 2 e 3.1a/3.1b concluídas e validadas. Deploy funcionando via VS Code → GitHub → Vercel.
 
 **Pasta de trabalho:** `cofit-task-manager` (clonada via git). O Cowork está apontado para ela. A pasta `cofit-task-manager-main` é uma cópia OLD sem git — ignorar.
 
@@ -141,28 +143,28 @@ Aplicação de nova identidade visual usando a ferramenta de design do Claude. S
 3. Vercel detecta o push e faz deploy automático em ~30s.
 4. Rodrigo testa no navegador, dá feedback, próxima entrega.
 
-**Estado do código relevante para a Fase 3:**
+**Estado do código relevante para continuar a Fase 3:**
 
-- **Status "Backlog" ainda hardcoded no código.** O `index.html` e os arquivos em `api/` ainda referenciam "Backlog" como valor padrão de status. A primeira entrega da Fase 3 deve substituir todas as ocorrências por "Inbox".
-- **Campo `priority` vs `Ordem`:** A reordenação manual (↑/↓) usa o campo `Prioridade` do Notion. A Fase 3 deve migrar essa lógica para o campo `Ordem` recém-criado. `Prioridade` pode continuar existindo no schema, mas sem uso na UI.
-- **`COLLAPSIBLE_COLS = ["Concluído"]`** — constante no topo do `index.html`. Na Fase 3 adicionar `"Aguardando"`, `"Snooze"`, `"Algum dia"` aqui.
-- **`api/_notion.js`** — função `buildProperties` não conhece os campos novos (`Snooze até`, `Aguardando`, `Ordem`). Precisará ser atualizada para mapeá-los.
-- **`api/tasks.js`** — o GET provavelmente não filtra cards de Snooze. Na Fase 3.3 deve excluir tarefas com `Status="Snooze"` e `Snooze até > hoje`.
-- **Coluna "Concluído"** — ainda renderizada como coluna normal. A Fase 3.6 a transforma em popover no header.
+- **`COLUMNS = ["Inbox", "A fazer", "Em andamento", "Concluído"]`** — ainda apenas 4 colunas. A 3.1c deve expandir para 6 e configurar `COLLAPSIBLE_COLS`.
+- **`COLLAPSIBLE_COLS = ["Concluído"]`** — na 3.1c adicionar `"Aguardando"`, `"Snooze"`, `"Algum dia"` (recolhidas por padrão).
+- **`COL_BG` e `COL_ACCENT`** — precisam receber entradas para as 3 novas colunas na 3.1c.
+- **`api/_notion.js`** — `buildProperties` ainda não mapeia `Snooze até` (Date) nem `Aguardando` (Rich text). Será necessário na 3.2 e 3.3.
+- **`api/tasks.js`** — o GET não filtra cards de Snooze. Na 3.3 deve excluir tarefas com `Status="Snooze"` e `Snooze até > hoje`.
+- **Botões de destino no Inbox (card fechado)** — atualmente mostram "A fazer" e "Em andamento". Na 3.1c ou 3.2, adicionar "Aguardando" e "Snooze" como destinos possíveis.
+- **Campo `Prioridade` (IA)** — ainda existe no schema do Notion e no código (`priBadge` foi migrado para `ordem`, mas `handlePrioritize` e o botão "Priorizar" ainda usam `priority`). Remoção prevista para 3.7.
+- **Coluna "Concluído"** — ainda renderizada como coluna normal. A 3.6 a transforma em popover no header.
 
 **Próxima ação técnica (ao iniciar nova conversa):**
 
-Iniciar **Fase 3**, entrega por entrega na seguinte ordem:
+Continuar **Fase 3** a partir de **3.1c**, entrega por entrega:
 
-- **3.1a** — Substituir todas as ocorrências de "Backlog" por "Inbox" no código (`index.html` e `api/`). Tarefa cirúrgica e de risco zero — o Notion já não tem mais "Backlog".
-- **3.1b** — Migrar lógica de reordenação de `priority`/`Prioridade` para `ordem`/`Ordem`. Atualizar `buildProperties` e `parsePage` em `api/_notion.js`, e os PATCHes de ↑/↓ no `index.html`.
-- **3.1c** — Renderizar as 6 colunas no grid; adicionar `"Aguardando"`, `"Snooze"`, `"Algum dia"` ao `COLLAPSIBLE_COLS` (recolhidas por padrão).
-- **3.2** — Mover para "Aguardando" abre mini-prompt ("aguardando o quê?"); salva no campo `Aguardando` do Notion.
-- **3.3** — Mover para "Snooze" abre mini-prompt (data); salva em `Snooze até`. GET filtra cards com `Snooze até > hoje`.
+- **3.1c** — Expandir `COLUMNS` para 6 (`"Inbox"`, `"A fazer"`, `"Em andamento"`, `"Aguardando"`, `"Snooze"`, `"Algum dia"`). Adicionar as 3 novas ao `COLLAPSIBLE_COLS` (recolhidas por padrão via `localStorage`). Adicionar cores a `COL_BG` e `COL_ACCENT` para as novas colunas. Botões de navegação entre colunas (`←`/`→` no hover) precisam considerar os novos índices.
+- **3.2** — Mover para "Aguardando" abre mini-prompt ("aguardando o quê?"); salva no campo `Aguardando` do Notion. Atualizar `buildProperties` em `api/_notion.js`.
+- **3.3** — Mover para "Snooze" abre mini-prompt (data); salva em `Snooze até`. GET filtra cards com `Snooze até > hoje`. Atualizar `buildProperties` e `api/tasks.js`.
 - **3.4** — Ao carregar, cards com `Status="Snooze"` e `Snooze até ≤ hoje` são automaticamente movidos para "Inbox" via PATCH.
 - **3.5** — Alerta visual (borda/ícone) em cards > 3 dias no Inbox.
 - **3.6** — Coluna "Concluído" some do grid; contador clicável no header abre popover das concluídas hoje.
-- **3.7** — Remover botão "Priorizar com IA" da UI principal.
+- **3.7** — Remover botão "Priorizar com IA" da UI principal. Limpar `handlePrioritize`, `priBadge` de `priority`, e referências ao campo `priority` que sobram.
 
 ---
 
