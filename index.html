@@ -317,6 +317,35 @@ function AguardandoModal({ onConfirm, onCancel }) {
   );
 }
 
+/* Modal de confirmação para mover para "Snooze" */
+function SnoozeModal({ onConfirm, onCancel }) {
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  const [date, setDate] = useState(tomorrow.toISOString().split("T")[0]);
+  const inputRef = useRef(null);
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 60); }, []);
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}>
+      <div style={{ background: "#fff", borderRadius: 12, padding: "22px 20px", maxWidth: 320, width: "92%", boxShadow: "0 16px 36px rgba(0,0,0,0.16)", animation: "fadeIn 0.15s ease" }}>
+        <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Snooze até quando?</p>
+        <p style={{ margin: "0 0 14px", fontSize: 11.5, color: "#64748b" }}>O card some da UI e volta para o Inbox na data escolhida.</p>
+        <input
+          ref={inputRef}
+          type="date"
+          value={date}
+          min={tomorrow.toISOString().split("T")[0]}
+          onChange={e => setDate(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && date) onConfirm(date); if (e.key === "Escape") onCancel(); }}
+          style={{ ...inp, marginBottom: 14, fontSize: 14 }}
+        />
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onCancel} style={btnG}>Cancelar</button>
+          <button onClick={() => date && onConfirm(date)} disabled={!date} style={{ ...btnP, background: "#94a3b8", opacity: date ? 1 : 0.4 }}>Confirmar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Banner({ status, onDismiss }) {
   if (!status) return null;
   const isErr = status.type === "error";
@@ -442,11 +471,12 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }}>▾</span>
       </div>
 
-      {(task.tags?.length > 0 || task.deadline || task.aguardando) && (
+      {(task.tags?.length > 0 || task.deadline || task.aguardando || task.snoozeUntil) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 3, padding: "0 10px 7px" }}>
           {(task.tags || []).map(t => <TagChip key={t} tag={t} small />)}
           {task.deadline && !open && <span style={{ fontSize: 9.5, color: overdue ? "#dc2626" : "#64748b", fontWeight: 500, padding: "1px 5px", background: overdue ? "#fef2f2" : "#f8fafc", borderRadius: 3, border: `1px solid ${overdue ? "#fca5a5" : "#e2e8f0"}` }}>📅 {fmtDateShort(task.deadline)}</span>}
           {task.aguardando && !open && <span style={{ fontSize: 9.5, color: "#8b5cf6", fontWeight: 500, padding: "1px 5px", background: "#f5f3ff", borderRadius: 3, border: "1px solid #ddd6fe", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={task.aguardando}>⏸ {task.aguardando}</span>}
+          {task.snoozeUntil && !open && <span style={{ fontSize: 9.5, color: "#94a3b8", fontWeight: 500, padding: "1px 5px", background: "#f8fafc", borderRadius: 3, border: "1px solid #e2e8f0" }}>💤 até {fmtDateShort(task.snoozeUntil)}</span>}
         </div>
       )}
 
@@ -469,6 +499,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         <div style={{ padding: "0 10px 10px", borderTop: "1px solid #f1f5f9", animation: "fadeIn 0.15s ease" }}>
           {task.description && <p style={{ fontSize: 11.5, color: "#475569", margin: "8px 0 6px", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{task.description}</p>}
           {task.aguardando && <p style={{ fontSize: 10.5, color: "#8b5cf6", margin: "0 0 6px", fontWeight: 500, wordBreak: "break-word" }}>⏸ Aguardando: {task.aguardando}</p>}
+          {task.snoozeUntil && <p style={{ fontSize: 10.5, color: "#94a3b8", margin: "0 0 6px", fontWeight: 500 }}>💤 Retorna em: {fmtDateShort(task.snoozeUntil)}</p>}
           {task.reason && <p style={{ fontSize: 10.5, color: "#94a3b8", margin: "0 0 6px", fontStyle: "italic", wordBreak: "break-word" }}>💡 {task.reason}</p>}
           {isDone && task.duration && <p style={{ fontSize: 10.5, color: "#10b981", margin: "0 0 5px" }}>⏱ {task.duration}</p>}
           <div style={{ fontSize: 9.5, color: "#94a3b8", display: "flex", flexWrap: "wrap", gap: "3px 10px", marginBottom: 8 }}>
@@ -627,6 +658,7 @@ function App() {
   const [showMobileAdd, setShowMobileAdd] = useState(false);
   const [reorderingCol, setReorderingCol] = useState(new Set()); // colunas com operação de reordenação em voo
   const [aguardandoPending, setAguardandoPending] = useState(null); // { id, target } aguardando input do modal
+  const [snoozePending, setSnoozePending] = useState(null); // { id, target } aguardando data do snooze
   const allTags = [...new Set(tasks.flatMap(t => t.tags || []))];
 
   function toggleCol(name) {
@@ -702,6 +734,11 @@ function App() {
       setAguardandoPending({ id, target });
       return;
     }
+    // "Snooze" exige data — abre modal se não veio extraChanges.snoozeUntil
+    if (target === "Snooze" && extraChanges.snoozeUntil === undefined) {
+      setSnoozePending({ id, target });
+      return;
+    }
 
     if (id === newCardId) setNewCardId(null); // remove destaque ao mover
 
@@ -712,6 +749,8 @@ function App() {
     if (sourceCol === "Concluído" && target !== "Concluído") { changes.completedAt = null; changes.duration = null; }
     // Limpa campo aguardando ao sair de "Aguardando"
     if (sourceCol === "Aguardando" && target !== "Aguardando") changes.aguardando = "";
+    // Limpa snoozeUntil ao sair de "Snooze"
+    if (sourceCol === "Snooze" && target !== "Snooze") changes.snoozeUntil = null;
 
     // Task entra no fim da coluna destino
     const destSize = tasks.filter(t => t.column === target).length;
@@ -719,7 +758,8 @@ function App() {
 
     // Snapshot para rollback
     const snapshot = tasks.map(t => ({ id: t.id, column: t.column, ordem: t.ordem,
-      startedAt: t.startedAt, completedAt: t.completedAt, duration: t.duration, aguardando: t.aguardando }));
+      startedAt: t.startedAt, completedAt: t.completedAt, duration: t.duration,
+      aguardando: t.aguardando, snoozeUntil: t.snoozeUntil }));
 
     // Aplica movimentação local
     let next = tasks.map(t => t.id === id ? { ...t, ...changes } : t);
@@ -896,6 +936,16 @@ function App() {
             handleMove(id, target, { aguardando: text });
           }}
           onCancel={() => setAguardandoPending(null)}
+        />
+      )}
+      {snoozePending && (
+        <SnoozeModal
+          onConfirm={date => {
+            const { id, target } = snoozePending;
+            setSnoozePending(null);
+            handleMove(id, target, { snoozeUntil: date });
+          }}
+          onCancel={() => setSnoozePending(null)}
         />
       )}
 

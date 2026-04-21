@@ -17,19 +17,38 @@ export default async function handler(req, res) {
         };
         if (cursor) body.start_cursor = cursor;
 
-        // If ?active=1, filter out Concluído
         const today = new Date().toISOString().split("T")[0];
-body.filter = {
-  or: [
-    { property: "Status", select: { does_not_equal: "Concluído" } },
-    {
-      and: [
-        { property: "Status", select: { equals: "Concluído" } },
-        { property: "Concluído em", date: { on_or_after: today } },
-      ],
-    },
-  ],
-};
+        body.filter = {
+          or: [
+            // Qualquer status que não seja Concluído nem Snooze
+            {
+              and: [
+                { property: "Status", select: { does_not_equal: "Concluído" } },
+                { property: "Status", select: { does_not_equal: "Snooze" } },
+              ],
+            },
+            // Concluído hoje (mantém visível no board durante o dia)
+            {
+              and: [
+                { property: "Status", select: { equals: "Concluído" } },
+                { property: "Concluído em", date: { on_or_after: today } },
+              ],
+            },
+            // Snooze com data vencida ou sem data (a 3.4 moverá para Inbox)
+            {
+              and: [
+                { property: "Status", select: { equals: "Snooze" } },
+                { property: "Snooze até", date: { on_or_before: today } },
+              ],
+            },
+            {
+              and: [
+                { property: "Status", select: { equals: "Snooze" } },
+                { property: "Snooze até", date: { is_empty: true } },
+              ],
+            },
+          ],
+        };
 
         const r = await fetch(
           `https://api.notion.com/v1/databases/${databaseId()}/query`,

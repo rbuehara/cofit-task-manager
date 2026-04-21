@@ -62,6 +62,9 @@ function buildProperties(task) {
   if (task.aguardando !== undefined) {
     props["Aguardando"] = { rich_text: [{ text: { content: task.aguardando || "" } }] };
   }
+  if (task.snoozeUntil !== undefined) {
+    props["Snooze até"] = task.snoozeUntil ? { date: { start: task.snoozeUntil } } : { date: null };
+  }
 
   return props;
 }
@@ -94,6 +97,7 @@ function parsePage(page) {
     startedAt: getDate(p["Início execução"]),
     completedAt: getDate(p["Concluído em"]),
     aguardando: getText(p["Aguardando"]),
+    snoozeUntil: getDate(p["Snooze até"]),
   };
 }
 
