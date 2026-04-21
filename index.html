@@ -308,7 +308,7 @@ function AddForm({ onAdd, busy }) {
 }
 
 /* CHANGED: TaskCard recebe allTags, gerencia eTags, inclui TagEditor no modo edição */
-function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, processing, allTags }) {
+function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, processing, allTags, isNew }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [eT, setET] = useState(task.title);
@@ -345,9 +345,24 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, process
     </div>
   );
 
+  /* Borda e fundo especiais quando o card é recém-criado */
+  const newStyle = isNew ? {
+    borderLeft: "3px solid #4f46e5",
+    boxShadow: "0 0 0 2px #4f46e520, 0 2px 8px rgba(79,70,229,0.12)",
+    background: "#fafafe",
+  } : {};
+
   return (
-    <div className="card-wrap" style={{ ...cardBase(COL_ACCENT[task.column]), opacity: isProc ? 0.5 : isDone ? 0.72 : 1, position: "relative", borderLeftColor: overdue ? "#ef4444" : COL_ACCENT[task.column], transition: "all 0.2s" }}>
+    <div className="card-wrap" style={{ ...cardBase(COL_ACCENT[task.column]), ...newStyle, opacity: isProc ? 0.5 : isDone ? 0.72 : 1, position: "relative", borderLeftColor: isNew ? "#4f46e5" : overdue ? "#ef4444" : COL_ACCENT[task.column], transition: "all 0.2s" }}>
       {isProc && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.8)", borderRadius: 8, zIndex: 2 }}><span style={{ fontSize: 11, color: "#4f46e5", fontWeight: 600 }}>Processando...</span></div>}
+
+      {/* Badge "Nova" no card recém-criado */}
+      {isNew && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px 0" }}>
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: "#4f46e5", background: "#ede9fe", borderRadius: 3, padding: "1px 5px", letterSpacing: 0.3 }}>NOVA</span>
+          <span style={{ fontSize: 10, color: "#94a3b8" }}>Para onde vai?</span>
+        </div>
+      )}
 
       <div onClick={() => setOpen(!open)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 10px", cursor: "pointer" }}>
         {priBadge}
@@ -360,6 +375,21 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, process
         <div style={{ display: "flex", flexWrap: "wrap", gap: 3, padding: "0 10px 7px" }}>
           {(task.tags || []).map(t => <TagChip key={t} tag={t} small />)}
           {task.deadline && !open && <span style={{ fontSize: 9.5, color: overdue ? "#dc2626" : "#64748b", fontWeight: 500, padding: "1px 5px", background: overdue ? "#fef2f2" : "#f8fafc", borderRadius: 3, border: `1px solid ${overdue ? "#fca5a5" : "#e2e8f0"}` }}>📅 {fmtDateShort(task.deadline)}</span>}
+        </div>
+      )}
+
+      {/* Botões de destino diretos — sempre visíveis no card novo, sem precisar expandir */}
+      {isNew && (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", padding: "0 10px 9px", borderTop: "1px solid #ede9fe", paddingTop: 7 }}>
+          {colIndex < COLUMNS.length - 1 && (
+            <button onClick={e => { e.stopPropagation(); onMove(task.id, "A fazer"); }} style={{ ...btnS, background: "#eff6ff", color: "#3b82f6", border: "1px solid #bfdbfe", fontWeight: 600 }}>A fazer</button>
+          )}
+          {colIndex < COLUMNS.length - 1 && (
+            <button onClick={e => { e.stopPropagation(); onMove(task.id, "Em andamento"); }} style={{ ...btnS, background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a", fontWeight: 600 }}>Em andamento</button>
+          )}
+          <div style={{ flex: 1 }} />
+          <button onClick={e => { e.stopPropagation(); setEditing(true); }} style={{ ...btnS, color: "#3b82f6" }}>✏️</button>
+          <button onClick={e => { e.stopPropagation(); if(confirm("Arquivar esta tarefa no Notion?")) onDelete(task.id); }} style={{ ...btnS, color: "#ef4444" }} title="Arquiva no Notion">🗑</button>
         </div>
       )}
 
@@ -386,7 +416,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, process
         </div>
       )}
 
-      {!open && <div className="hover-actions" style={{ position: "absolute", right: 6, top: 7, display: "none", gap: 2 }}>
+      {!open && !isNew && <div className="hover-actions" style={{ position: "absolute", right: 6, top: 7, display: "none", gap: 2 }}>
         {colIndex > 0 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex - 1]); }} style={{ ...btnS, padding: "2px 5px", fontSize: 9 }}>←</button>}
         {colIndex < 3 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex + 1]); }} style={{ ...btnS, padding: "2px 5px", fontSize: 9 }}>→</button>}
       </div>}
@@ -422,11 +452,17 @@ function CollapsiblePill({ name, count, onExpand }) {
   );
 }
 
-/* CHANGED: Column recebe e repassa allTags */
-function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, processing, allTags, onCollapse }) {
+/* CHANGED: Column recebe e repassa allTags e newCardId */
+function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, processing, allTags, onCollapse, newCardId }) {
   const [showAll, setShowAll] = useState(false);
   const isDone = name === "Concluído";
-  const sorted = [...tasks].sort((a, b) => (a.priority || 999) - (b.priority || 999));
+
+  /* Card novo sempre no topo; demais ordenados por prioridade */
+  const sorted = [...tasks].sort((a, b) => {
+    if (a.id === newCardId) return -1;
+    if (b.id === newCardId) return 1;
+    return (a.priority || 999) - (b.priority || 999);
+  });
   const visible = isDone && !showAll ? sorted.slice(0, 5) : sorted;
   const hidden = isDone ? sorted.length - visible.length : 0;
   return (
@@ -444,7 +480,7 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, pr
         )}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "7px 6px 3px", display: "flex", flexDirection: "column", gap: 5 }}>
-        {visible.map(t => <TaskCard key={t.id} task={t} colIndex={colIndex} onMove={onMove} onEdit={onEdit} onDelete={onDelete} onImprove={onImprove} processing={processing} allTags={allTags} />)}
+        {visible.map(t => <TaskCard key={t.id} task={t} colIndex={colIndex} onMove={onMove} onEdit={onEdit} onDelete={onDelete} onImprove={onImprove} processing={processing} allTags={allTags} isNew={t.id === newCardId} />)}
         {!tasks.length && <p style={{ fontSize: 11, color: "#cbd5e1", textAlign: "center", padding: 20 }}>Nenhuma tarefa</p>}
         {hidden > 0 && <button onClick={() => setShowAll(true)} style={{ ...btnG, fontSize: 10, padding: "5px 0", textAlign: "center", width: "100%", border: "1px dashed #cbd5e1" }}>+ {hidden} anterior{hidden > 1 ? "es" : ""}</button>}
         {isDone && showAll && sorted.length > 5 && <button onClick={() => setShowAll(false)} style={{ ...btnG, fontSize: 10, padding: "5px 0", textAlign: "center", width: "100%", border: "1px dashed #cbd5e1" }}>Mostrar menos</button>}
@@ -468,6 +504,7 @@ function App() {
   const [processing, setProcessing] = useState(null);
   const [prioritizing, setPrioritizing] = useState(false);
   const [banner, setBanner] = useState(null);
+  const [newCardId, setNewCardId] = useState(null);
   const allTags = [...new Set(tasks.flatMap(t => t.tags || []))];
 
   function toggleCol(name) {
@@ -504,12 +541,14 @@ function App() {
       const taskData = { title: polished?.title || title, description: polished?.description || description, tags: polished?.tags || [], deadline, column: "Backlog", createdAt: new Date().toISOString() };
       const data = await api("/api/tasks", { method: "POST", body: taskData });
       setTasks(prev => [...prev, data.task]);
+      setNewCardId(data.task.id);
     } catch (e) { setBanner({ type: "error", msg: "Erro ao criar tarefa", detail: e.message }); }
     setProcessing(null);
   }
 
   async function handleMove(id, target) {
     const task = tasks.find(t => t.id === id); if (!task) return;
+    if (id === newCardId) setNewCardId(null); // remove destaque ao mover
     const changes = { column: target };
     if (target === "Em andamento" && !task.startedAt) changes.startedAt = new Date().toISOString();
     if (target === "Concluído") { changes.completedAt = new Date().toISOString(); changes.duration = calcDuration(task.startedAt || task.createdAt, changes.completedAt); }
@@ -623,7 +662,7 @@ function App() {
           {COLUMNS.filter(col => !collapsedCols.includes(col)).map((col, _) => {
             const i = COLUMNS.indexOf(col);
             const isCollapsible = COLLAPSIBLE_COLS.includes(col);
-            return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} processing={processing} allTags={allTags} onCollapse={isCollapsible ? () => toggleCol(col) : null} />;
+            return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} processing={processing} allTags={allTags} onCollapse={isCollapsible ? () => toggleCol(col) : null} newCardId={newCardId} />;
           })}
         </div>
       </div>
