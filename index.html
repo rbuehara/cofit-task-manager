@@ -560,13 +560,13 @@ function App() {
         </button>
         <button onClick={() => setShowProfile(true)} style={{ padding: "4px 8px", borderRadius: 5, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "#475569", fontSize: 12 }}>⚙️</button>
       </header>
-      <div style={{ padding: "12px 16px", maxWidth: 1320, margin: "0 auto" }}>
+      <div style={{ padding: "12px 16px" }}>
         <Banner status={banner} onDismiss={() => setBanner(null)} />
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
           <AddForm onAdd={handleAdd} busy={processing === "new"} />
           <button onClick={handlePrioritize} disabled={prioritizing || !activeN} style={{ ...btnP, background: "#1e40af", fontSize: 12, padding: "7px 14px", opacity: prioritizing || !activeN ? 0.5 : 1 }}>⚡ {prioritizing ? "..." : "Priorizar"}</button>
         </div>
-        <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+        <div style={{ display: "flex", gap: 8 }}>
           {COLUMNS.map((col, i) => <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} processing={processing} allTags={allTags} />)}
         </div>
       </div>

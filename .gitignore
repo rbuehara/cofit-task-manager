@@ -1,0 +1,22 @@
+# Segredos — NUNCA commitar
+.env
+.env.local
+.env.*.local
+
+# Backups locais do Notion
+backups/
+
+# Dependências (caso futuro)
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editores
+.vscode/
+.idea/
+.DS_Store
+
+# Vercel
+.vercel
