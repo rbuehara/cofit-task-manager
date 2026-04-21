@@ -815,6 +815,7 @@ function App() {
         <>
           <div className="mobile-add-backdrop" onClick={() => setShowMobileAdd(false)} />
           <div className="mobile-add-modal">
+            <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Nova tarefa</p>
             <AddForm onAdd={(data) => { handleAdd(data); setShowMobileAdd(false); }} busy={processing === "new"} initialOpen />
           </div>
         </>
