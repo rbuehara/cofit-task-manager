@@ -353,11 +353,9 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
   /* CHANGED: save passa tags editadas pelo usuário */
   const save = () => { if (!eT.trim()) return; onEdit(task.id, { title: eT.trim(), description: eD.trim(), deadline: eDl || null, tags: eTags }); setEditing(false); };
 
-  const priBadge = task.priority ? (
+  const priBadge = task.ordem != null ? (
     <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 20, height: 20, borderRadius: "50%", fontSize: 10, fontWeight: 700,
-      background: task.priority <= 2 ? "#fef2f2" : task.priority <= 4 ? "#fffbeb" : "#f0fdf4",
-      color: task.priority <= 2 ? "#dc2626" : task.priority <= 4 ? "#d97706" : "#16a34a",
-      border: `1.5px solid ${task.priority <= 2 ? "#fca5a5" : task.priority <= 4 ? "#fcd34d" : "#86efac"}`, flexShrink: 0 }}>{task.priority}</span>
+      background: "#f1f5f9", color: "#64748b", border: "1.5px solid #cbd5e1", flexShrink: 0 }}>{task.ordem}</span>
   ) : null;
 
   if (editing) return (
@@ -554,6 +552,7 @@ function App() {
   const [newCardId, setNewCardId] = useState(null);
   const [mobileCol, setMobileCol] = useState(0); // índice da coluna visível no mobile
   const [showMobileAdd, setShowMobileAdd] = useState(false);
+  const [reorderingCol, setReorderingCol] = useState(new Set()); // colunas com operação de reordenação em voo
   const allTags = [...new Set(tasks.flatMap(t => t.tags || []))];
 
   function toggleCol(name) {
@@ -566,6 +565,31 @@ function App() {
 
   useEffect(() => { fetchTasks(); }, []);
   useEffect(() => { if (!loading && !profile) setShowProfile(true); }, [loading, profile]);
+
+  // Renumera sequencialmente (1..N) as tasks de uma coluna.
+  // Retorna { updatedTasks, changed } onde `changed` contém só as tasks cujo valor de ordem mudou.
+  function renumberColumn(allTasks, colName, currentNewCardId) {
+    const colTasks = allTasks.filter(t => t.column === colName);
+    const sorted = [...colTasks].sort((a, b) => {
+      if (a.id === currentNewCardId) return -1;
+      if (b.id === currentNewCardId) return 1;
+      const oa = a.ordem ?? Infinity;
+      const ob = b.ordem ?? Infinity;
+      if (oa !== ob) return oa - ob;
+      return (a.createdAt || "").localeCompare(b.createdAt || ""); // desempate estável
+    });
+    const changed = [];
+    const newOrderById = new Map();
+    sorted.forEach((t, i) => {
+      const newOrdem = i + 1;
+      if (t.ordem !== newOrdem) changed.push({ id: t.id, ordem: newOrdem });
+      newOrderById.set(t.id, newOrdem);
+    });
+    const updatedTasks = allTasks.map(t =>
+      newOrderById.has(t.id) ? { ...t, ordem: newOrderById.get(t.id) } : t
+    );
+    return { updatedTasks, changed };
+  }
 
   async function fetchTasks() {
     setLoading(true); setLoadError(null);
@@ -597,14 +621,50 @@ function App() {
 
   async function handleMove(id, target) {
     const task = tasks.find(t => t.id === id); if (!task) return;
+    if (task.column === target) return;
     if (id === newCardId) setNewCardId(null); // remove destaque ao mover
+
+    const sourceCol = task.column;
     const changes = { column: target };
     if (target === "Em andamento" && !task.startedAt) changes.startedAt = new Date().toISOString();
     if (target === "Concluído") { changes.completedAt = new Date().toISOString(); changes.duration = calcDuration(task.startedAt || task.createdAt, changes.completedAt); }
-    if (task.column === "Concluído" && target !== "Concluído") { changes.completedAt = null; changes.duration = null; }
-    updateLocal(id, changes);
-    try { await api(`/api/tasks/${id}`, { method: "PATCH", body: changes }); }
-    catch (e) { updateLocal(id, { column: task.column, startedAt: task.startedAt, completedAt: task.completedAt, duration: task.duration }); setBanner({ type: "error", msg: "Erro ao mover tarefa", detail: e.message }); }
+    if (sourceCol === "Concluído" && target !== "Concluído") { changes.completedAt = null; changes.duration = null; }
+
+    // Task entra no fim da coluna destino
+    const destSize = tasks.filter(t => t.column === target).length;
+    changes.ordem = destSize + 1;
+
+    // Snapshot para rollback
+    const snapshot = tasks.map(t => ({ id: t.id, column: t.column, ordem: t.ordem,
+      startedAt: t.startedAt, completedAt: t.completedAt, duration: t.duration }));
+
+    // Aplica movimentação local
+    let next = tasks.map(t => t.id === id ? { ...t, ...changes } : t);
+
+    // Renumera coluna origem para fechar o gap
+    const { updatedTasks: nextAfterRenum, changed: sourceChanged } =
+      renumberColumn(next, sourceCol, newCardId);
+    next = nextAfterRenum;
+
+    setTasks(next);
+
+    // Persiste: move principal + renumerações da origem
+    const patches = [
+      api(`/api/tasks/${id}`, { method: "PATCH", body: changes }),
+      ...sourceChanged.map(c =>
+        api(`/api/tasks/${c.id}`, { method: "PATCH", body: { ordem: c.ordem } })
+      ),
+    ];
+
+    try {
+      await Promise.all(patches);
+    } catch (e) {
+      setTasks(prev => prev.map(t => {
+        const snap = snapshot.find(s => s.id === t.id);
+        return snap ? { ...t, ...snap } : t;
+      }));
+      setBanner({ type: "error", msg: "Erro ao mover tarefa", detail: e.message });
+    }
   }
 
   /* CHANGED: handleEdit agora recebe tags do formulário e as usa diretamente */
@@ -638,63 +698,61 @@ function App() {
 
   async function handleReorder(id, direction) {
     const task = tasks.find(t => t.id === id); if (!task) return;
-    // Pega as tarefas da mesma coluna na ordem visual atual (mesma lógica do Column)
+    if (reorderingCol.has(task.column)) return; // bloqueia cliques concorrentes
+
+    // Ordena a coluna pela visão atual (mesma lógica do Column e do renumberColumn)
     const colTasks = [...tasks.filter(t => t.column === task.column)].sort((a, b) => {
       if (a.id === newCardId) return -1;
       if (b.id === newCardId) return 1;
-      return (a.ordem ?? Infinity) - (b.ordem ?? Infinity);
+      const oa = a.ordem ?? Infinity;
+      const ob = b.ordem ?? Infinity;
+      if (oa !== ob) return oa - ob;
+      return (a.createdAt || "").localeCompare(b.createdAt || ""); // desempate estável
     });
+
     const idx = colTasks.findIndex(t => t.id === id);
-    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= colTasks.length) return; // já está no limite
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= colTasks.length) return;
 
-    const neighbor = colTasks[swapIdx];
+    // Manipulação de array: remove e insere no novo índice
+    const reordered = [...colTasks];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(targetIdx, 0, moved);
 
-    // Normaliza a coluna inteira se qualquer task ainda não tem ordem definida.
-    // Isso evita fallbacks baseados em índice que geram números estranhos (ex: 60).
-    const needsNormalization = colTasks.some(t => t.ordem == null);
-    let normalizedTasks = colTasks;
-    if (needsNormalization) {
-      normalizedTasks = colTasks.map((t, i) => ({ ...t, ordem: i + 1 }));
-      // Persiste normalização no Notion (fire-and-forget, sem bloquear UX)
-      normalizedTasks.forEach(t => {
-        api(`/api/tasks/${t.id}`, { method: "PATCH", body: { ordem: t.ordem } }).catch(() => {});
-      });
-      // Atualiza estado local com a normalização
-      setTasks(prev => prev.map(t => {
-        const norm = normalizedTasks.find(n => n.id === t.id);
-        return norm ? { ...t, ordem: norm.ordem } : t;
-      }));
-    }
+    // Aplica nova ordem (1..N) e identifica diffs
+    const newOrderById = new Map();
+    const changed = [];
+    reordered.forEach((t, i) => {
+      const newOrdem = i + 1;
+      newOrderById.set(t.id, newOrdem);
+      if (t.ordem !== newOrdem) changed.push({ id: t.id, ordem: newOrdem });
+    });
 
-    const myOrder = normalizedTasks[idx].ordem;
-    const neighborOrder = normalizedTasks[swapIdx].ordem;
+    if (changed.length === 0) return;
 
-    // Troca os valores de ordem entre os dois cards
-    const myNew = neighborOrder;
-    const neighborNew = myOrder;
+    // Snapshot para rollback local
+    const prevOrderById = new Map(colTasks.map(t => [t.id, t.ordem]));
 
-    // Atualiza local imediatamente (UX responsiva)
-    setTasks(prev => prev.map(t => {
-      if (t.id === id) return { ...t, ordem: myNew };
-      if (t.id === neighbor.id) return { ...t, ordem: neighborNew };
-      return t;
-    }));
+    // Atualiza estado local imediatamente
+    setTasks(prev => prev.map(t =>
+      newOrderById.has(t.id) ? { ...t, ordem: newOrderById.get(t.id) } : t
+    ));
 
-    // Persiste a troca no Notion
+    // Marca coluna como em operação
+    setReorderingCol(prev => { const s = new Set(prev); s.add(task.column); return s; });
+
     try {
-      await Promise.all([
-        api(`/api/tasks/${id}`, { method: "PATCH", body: { ordem: myNew } }),
-        api(`/api/tasks/${neighbor.id}`, { method: "PATCH", body: { ordem: neighborNew } }),
-      ]);
+      await Promise.all(
+        changed.map(c => api(`/api/tasks/${c.id}`, { method: "PATCH", body: { ordem: c.ordem } }))
+      );
     } catch (e) {
-      // Reverte em caso de erro
-      setTasks(prev => prev.map(t => {
-        if (t.id === id) return { ...t, ordem: myOrder };
-        if (t.id === neighbor.id) return { ...t, ordem: neighborOrder };
-        return t;
-      }));
+      // Rollback local. Se algum PATCH teve sucesso e outro falhou, o próximo fetchTasks reconcilia.
+      setTasks(prev => prev.map(t =>
+        prevOrderById.has(t.id) ? { ...t, ordem: prevOrderById.get(t.id) } : t
+      ));
       setBanner({ type: "error", msg: "Erro ao reordenar", detail: e.message });
+    } finally {
+      setReorderingCol(prev => { const s = new Set(prev); s.delete(task.column); return s; });
     }
   }
 
