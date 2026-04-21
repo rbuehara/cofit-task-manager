@@ -129,6 +129,7 @@ const { useState, useEffect, useCallback, useRef } = React;
 
 /* ── Constants ── */
 const COLUMNS = ["Backlog", "A fazer", "Em andamento", "Concluído"];
+const COLLAPSIBLE_COLS = ["Concluído"]; // colunas que podem ser recolhidas (Fase 1.2); mais virão na Fase 3
 const COL_BG = { Backlog: "rgba(100,116,139,0.07)", "A fazer": "rgba(59,130,246,0.07)", "Em andamento": "rgba(245,158,11,0.07)", Concluído: "rgba(16,185,129,0.07)" };
 const COL_ACCENT = { Backlog: "#64748b", "A fazer": "#3b82f6", "Em andamento": "#f59e0b", Concluído: "#10b981" };
 const TAG_COLORS = {
@@ -393,8 +394,36 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, process
   );
 }
 
+/* ── CollapsiblePill: exibida no header quando uma coluna está recolhida ── */
+function CollapsiblePill({ name, count, onExpand }) {
+  const accent = COL_ACCENT[name];
+  return (
+    <button
+      onClick={onExpand}
+      title={`Expandir coluna ${name}`}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 5,
+        padding: "4px 10px", borderRadius: 20,
+        border: `1.5px solid ${accent}40`,
+        background: `${accent}12`,
+        color: accent, fontSize: 11.5, fontWeight: 600,
+        cursor: "pointer", fontFamily: "inherit",
+        transition: "background 0.15s",
+      }}
+    >
+      {name}
+      <span style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        minWidth: 18, height: 18, borderRadius: 9,
+        background: accent, color: "#fff",
+        fontSize: 10, fontWeight: 700, lineHeight: 1,
+      }}>{count}</span>
+    </button>
+  );
+}
+
 /* CHANGED: Column recebe e repassa allTags */
-function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, processing, allTags }) {
+function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, processing, allTags, onCollapse }) {
   const [showAll, setShowAll] = useState(false);
   const isDone = name === "Concluído";
   const sorted = [...tasks].sort((a, b) => (a.priority || 999) - (b.priority || 999));
@@ -406,6 +435,13 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, pr
         <div style={{ width: 9, height: 9, borderRadius: 3, background: COL_ACCENT[name] }} />
         <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0f172a" }}>{name}</span>
         <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>{tasks.length}</span>
+        {onCollapse && (
+          <button
+            onClick={onCollapse}
+            title="Recolher coluna"
+            style={{ marginLeft: "auto", border: "none", background: "transparent", color: "#94a3b8", cursor: "pointer", fontSize: 13, padding: "0 2px", lineHeight: 1, fontFamily: "inherit" }}
+          >⟨</button>
+        )}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "7px 6px 3px", display: "flex", flexDirection: "column", gap: 5 }}>
         {visible.map(t => <TaskCard key={t.id} task={t} colIndex={colIndex} onMove={onMove} onEdit={onEdit} onDelete={onDelete} onImprove={onImprove} processing={processing} allTags={allTags} />)}
@@ -423,6 +459,9 @@ function App() {
   const [profile, setProfile] = useState(() => {
     try { return JSON.parse(localStorage.getItem("cofit-profile")); } catch { return null; }
   });
+  const [collapsedCols, setCollapsedCols] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("cofit-collapsed")) || COLLAPSIBLE_COLS; } catch { return COLLAPSIBLE_COLS; }
+  });
   const [showProfile, setShowProfile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -430,6 +469,14 @@ function App() {
   const [prioritizing, setPrioritizing] = useState(false);
   const [banner, setBanner] = useState(null);
   const allTags = [...new Set(tasks.flatMap(t => t.tags || []))];
+
+  function toggleCol(name) {
+    setCollapsedCols(prev => {
+      const next = prev.includes(name) ? prev.filter(c => c !== name) : [...prev, name];
+      localStorage.setItem("cofit-collapsed", JSON.stringify(next));
+      return next;
+    });
+  }
 
   useEffect(() => { fetchTasks(); }, []);
   useEffect(() => { if (!loading && !profile) setShowProfile(true); }, [loading, profile]);
@@ -555,6 +602,12 @@ function App() {
           <span><b style={{ color: "#34d399" }}>{doneToday}</b> concluída{doneToday !== 1 ? "s" : ""} hoje</span>
         </div>
         <div style={{ flex: 1 }} />
+        {/* Pills das colunas recolhidas */}
+        {collapsedCols.filter(c => COLLAPSIBLE_COLS.includes(c)).map(c => {
+          const idx = COLUMNS.indexOf(c);
+          const count = idx >= 0 ? byCols[idx].length : 0;
+          return <CollapsiblePill key={c} name={c} count={count} onExpand={() => toggleCol(c)} />;
+        })}
         <button onClick={fetchTasks} title="Recarregar do Notion" style={{ padding: "4px 10px", borderRadius: 5, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "#94a3b8", fontSize: 10, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }}>
           <span>🔄</span><span style={{ fontWeight: 600 }}>Recarregar</span>
         </button>
@@ -567,7 +620,11 @@ function App() {
           <button onClick={handlePrioritize} disabled={prioritizing || !activeN} style={{ ...btnP, background: "#1e40af", fontSize: 12, padding: "7px 14px", opacity: prioritizing || !activeN ? 0.5 : 1 }}>⚡ {prioritizing ? "..." : "Priorizar"}</button>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {COLUMNS.map((col, i) => <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} processing={processing} allTags={allTags} />)}
+          {COLUMNS.filter(col => !collapsedCols.includes(col)).map((col, _) => {
+            const i = COLUMNS.indexOf(col);
+            const isCollapsible = COLLAPSIBLE_COLS.includes(col);
+            return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} processing={processing} allTags={allTags} onCollapse={isCollapsible ? () => toggleCol(col) : null} />;
+          })}
         </div>
       </div>
     </div>
