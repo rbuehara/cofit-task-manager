@@ -528,16 +528,16 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
   const hidden = isDone ? sorted.length - visible.length : 0;
   return (
     <div style={{ flex: 1, minWidth: 230, display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 150px)", background: COL_BG[name], borderRadius: 10, padding: "0 0 6px", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "12px 12px 9px", borderBottom: `2px solid ${COL_ACCENT[name]}20`, flexShrink: 0 }}>
+      <div
+        onClick={onCollapse || undefined}
+        title={onCollapse ? "Clique para recolher" : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 7, padding: "12px 12px 9px", borderBottom: `2px solid ${COL_ACCENT[name]}20`, flexShrink: 0, cursor: onCollapse ? "pointer" : "default" }}
+      >
         <div style={{ width: 9, height: 9, borderRadius: 3, background: COL_ACCENT[name] }} />
         <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0f172a" }}>{name}</span>
         <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>{tasks.length}</span>
         {onCollapse && (
-          <button
-            onClick={onCollapse}
-            title="Recolher coluna"
-            style={{ marginLeft: "auto", border: "none", background: "transparent", color: "#94a3b8", cursor: "pointer", fontSize: 13, padding: "0 2px", lineHeight: 1, fontFamily: "inherit" }}
-          >⟨</button>
+          <span style={{ marginLeft: "auto", color: "#cbd5e1", fontSize: 11, lineHeight: 1, userSelect: "none" }}>⟨</span>
         )}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "7px 6px 3px", display: "flex", flexDirection: "column", gap: 5 }}>
