@@ -709,7 +709,21 @@ function App() {
     setLoading(true); setLoadError(null);
     try {
       const data = await api("/api/tasks");
-      setTasks(data.tasks || []);
+      let fetched = data.tasks || [];
+
+      // 3.4 — Acorda cards com Snooze vencido: move automaticamente para Inbox
+      const today = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
+      const vencidos = fetched.filter(t => t.column === "Snooze" && t.snoozeUntil && t.snoozeUntil <= today);
+      if (vencidos.length > 0) {
+        await Promise.all(
+          vencidos.map(t => api(`/api/tasks/${t.id}`, { method: "PATCH", body: { column: "Inbox", snoozeUntil: null } }))
+        );
+        fetched = fetched.map(t =>
+          vencidos.some(v => v.id === t.id) ? { ...t, column: "Inbox", snoozeUntil: null } : t
+        );
+      }
+
+      setTasks(fetched);
     } catch (e) {
       if (!e.message.includes("expirada")) setLoadError(e.message);
     }

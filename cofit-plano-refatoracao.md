@@ -109,9 +109,9 @@ Execução **uma mudança por entrega**, Rodrigo testa antes da próxima. Rodrig
 
 - **3.1a** ✅ Substituídas todas as ocorrências de "Backlog" por "Inbox" no código (`index.html` e `api/`).
 - **3.1b** ✅ Reordenação migrada de `priority`/`Prioridade` para `ordem`/`Ordem`. `buildProperties` e `parsePage` em `api/_notion.js` atualizados. Lógica de `handleReorder` reescrita: renumeração sequencial 1..N por coluna (abandona swap de valores). `handleMove` atualizado: atribui `ordem = N+1` no destino e renumera coluna origem. Helper `renumberColumn` criado. Flag `reorderingCol` bloqueia cliques concorrentes e exibe ⏳ nos botões ↑/↓. `priBadge` exibe `task.ordem` em cinza neutro. Persistência sempre envia PATCH para toda a coluna (sem diff otimizado) para garantir consistência com o Notion.
-- **3.1c** — Renderizar as 6 colunas no grid; adicionar `"Aguardando"`, `"Snooze"`, `"Algum dia"` ao `COLLAPSIBLE_COLS` (recolhidas por padrão).
-- **3.2** — Mover para "Aguardando" abre mini-prompt ("aguardando o quê?"); salva no campo `Aguardando` do Notion.
-- **3.3** — Mover para "Snooze" abre mini-prompt (data); salva em `Snooze até`. GET filtra cards com `Snooze até > hoje`.
+- **3.1c** ✅ `COLUMNS` expandido para 7 (inclui "Concluído" que só sai na 3.6). `COLLAPSIBLE_COLS` inclui "Concluído", "Aguardando", "Snooze", "Algum dia" — recolhidas por padrão. `COL_BG` e `COL_ACCENT` com cores para as 3 novas. Migração única de `localStorage` via flag `cofit-col-migrated`. Hardcodes `colIndex < 3` corrigidos para `COLUMNS.length - 1`. Clique para recolher coluna agora é na barra de título inteira (não só no botão `⟨`). Botões de destino unificados e dinâmicos nos três lugares: card novo, Inbox fechado e card expandido — todos usam `COLUMNS.filter(c => c !== task.column)`.
+- **3.2** ✅ Mover para "Aguardando" intercepta `handleMove`, abre `AguardandoModal` (textarea + Enter/Escape). Salva campo `Aguardando` (Rich text) no Notion via `buildProperties`/`parsePage`. Campo exibido em roxo no card fechado (badge truncado com tooltip) e no expandido. Limpo ao sair da coluna.
+- **3.3** ✅ Mover para "Snooze" intercepta `handleMove`, abre `SnoozeModal` (date picker, mínimo = amanhã). Salva campo `Snooze até` (Date) no Notion. GET em `tasks.js` reescrito: exclui Snooze com data futura; inclui Snooze com data vencida ou sem data (para a 3.4 processar). Campo exibido como badge "💤 até DD/MM" no card. Limpo ao sair da coluna.
 - **3.4** — Ao carregar, cards com `Status="Snooze"` e `Snooze até ≤ hoje` são automaticamente movidos para "Inbox" via PATCH.
 - **3.5** — Alerta visual (borda/ícone) em cards > 3 dias no Inbox.
 - **3.6** — Coluna "Concluído" some do grid; contador clicável no header abre popover das concluídas hoje.
@@ -133,7 +133,7 @@ Aplicação de nova identidade visual usando a ferramenta de design do Claude. S
 
 ## Estado atual / próxima sessão
 
-**Última etapa confirmada:** Fases 1, 2 e 3.1a/3.1b concluídas e validadas. Deploy funcionando via VS Code → GitHub → Vercel.
+**Última etapa confirmada:** Fases 1, 2, 3.1a, 3.1b, 3.1c, 3.2 e 3.3 concluídas e validadas. Deploy funcionando via VS Code → GitHub → Vercel.
 
 **Pasta de trabalho:** `cofit-task-manager` (clonada via git). O Cowork está apontado para ela. A pasta `cofit-task-manager-main` é uma cópia OLD sem git — ignorar.
 
@@ -145,26 +145,22 @@ Aplicação de nova identidade visual usando a ferramenta de design do Claude. S
 
 **Estado do código relevante para continuar a Fase 3:**
 
-- **`COLUMNS = ["Inbox", "A fazer", "Em andamento", "Concluído"]`** — ainda apenas 4 colunas. A 3.1c deve expandir para 6 e configurar `COLLAPSIBLE_COLS`.
-- **`COLLAPSIBLE_COLS = ["Concluído"]`** — na 3.1c adicionar `"Aguardando"`, `"Snooze"`, `"Algum dia"` (recolhidas por padrão).
-- **`COL_BG` e `COL_ACCENT`** — precisam receber entradas para as 3 novas colunas na 3.1c.
-- **`api/_notion.js`** — `buildProperties` ainda não mapeia `Snooze até` (Date) nem `Aguardando` (Rich text). Será necessário na 3.2 e 3.3.
-- **`api/tasks.js`** — o GET não filtra cards de Snooze. Na 3.3 deve excluir tarefas com `Status="Snooze"` e `Snooze até > hoje`.
-- **Botões de destino no Inbox (card fechado)** — atualmente mostram "A fazer" e "Em andamento". Na 3.1c ou 3.2, adicionar "Aguardando" e "Snooze" como destinos possíveis.
-- **Campo `Prioridade` (IA)** — ainda existe no schema do Notion e no código (`priBadge` foi migrado para `ordem`, mas `handlePrioritize` e o botão "Priorizar" ainda usam `priority`). Remoção prevista para 3.7.
-- **Coluna "Concluído"** — ainda renderizada como coluna normal. A 3.6 a transforma em popover no header.
+- **`COLUMNS`** = `["Inbox", "A fazer", "Em andamento", "Concluído", "Aguardando", "Snooze", "Algum dia"]` — 7 colunas. "Concluído" ainda é coluna normal; some na 3.6.
+- **`COLLAPSIBLE_COLS`** = `["Concluído", "Aguardando", "Snooze", "Algum dia"]` — recolhidas por padrão. Estado persistido em `localStorage` com chave `cofit-collapsed`. Migração única via flag `cofit-col-migrated`.
+- **`api/_notion.js`** — `buildProperties` e `parsePage` mapeiam: `Ordem`, `Aguardando` (Rich text), `Snooze até` (Date). Campo `Prioridade` ainda mapeado (removido na 3.7).
+- **`api/tasks.js`** — GET filtra: exclui Snooze com data futura; inclui Snooze vencido (para 3.4 processar); inclui Concluído do dia.
+- **`handleMove`** — intercepta "Aguardando" (abre `AguardandoModal`) e "Snooze" (abre `SnoozeModal`). Limpa campos ao sair de cada coluna. `duration` usa `startedAt || createdAt` como fallback — cobre conclusão direta do Inbox.
+- **Campo `Prioridade` (IA)** — ainda no código (`handlePrioritize`, botão "Priorizar"). Remoção na 3.7.
+- **Coluna "Concluído"** — ainda renderizada como coluna normal. Vira popover na 3.6.
 
 **Próxima ação técnica (ao iniciar nova conversa):**
 
-Continuar **Fase 3** a partir de **3.1c**, entrega por entrega:
+Continuar **Fase 3** a partir de **3.4**, entrega por entrega:
 
-- **3.1c** — Expandir `COLUMNS` para 6 (`"Inbox"`, `"A fazer"`, `"Em andamento"`, `"Aguardando"`, `"Snooze"`, `"Algum dia"`). Adicionar as 3 novas ao `COLLAPSIBLE_COLS` (recolhidas por padrão via `localStorage`). Adicionar cores a `COL_BG` e `COL_ACCENT` para as novas colunas. Botões de navegação entre colunas (`←`/`→` no hover) precisam considerar os novos índices.
-- **3.2** — Mover para "Aguardando" abre mini-prompt ("aguardando o quê?"); salva no campo `Aguardando` do Notion. Atualizar `buildProperties` em `api/_notion.js`.
-- **3.3** — Mover para "Snooze" abre mini-prompt (data); salva em `Snooze até`. GET filtra cards com `Snooze até > hoje`. Atualizar `buildProperties` e `api/tasks.js`.
-- **3.4** — Ao carregar, cards com `Status="Snooze"` e `Snooze até ≤ hoje` são automaticamente movidos para "Inbox" via PATCH.
-- **3.5** — Alerta visual (borda/ícone) em cards > 3 dias no Inbox.
-- **3.6** — Coluna "Concluído" some do grid; contador clicável no header abre popover das concluídas hoje.
-- **3.7** — Remover botão "Priorizar com IA" da UI principal. Limpar `handlePrioritize`, `priBadge` de `priority`, e referências ao campo `priority` que sobram.
+- **3.4** — Ao carregar (`fetchTasks`), cards retornados com `Status="Snooze"` e `snoozeUntil ≤ hoje` devem ser movidos automaticamente para "Inbox" via PATCH (sem interação do usuário). Limpar `snoozeUntil` ao mover.
+- **3.5** — Alerta visual (borda laranja + ícone ⚠️) em cards com mais de 3 dias no Inbox (`createdAt` > 3 dias atrás e `column === "Inbox"`).
+- **3.6** — Coluna "Concluído" some do grid. Contador clicável no header abre popover listando as tarefas concluídas hoje (já disponíveis no `byCols[COL_IDX["Concluído"]]`).
+- **3.7** — Remover botão "Priorizar com IA" da UI principal. Limpar `handlePrioritize`, estado `prioritizing`, e referências ao campo `priority` que sobram no código.
 
 ---
 
