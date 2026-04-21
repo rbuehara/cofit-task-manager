@@ -480,15 +480,18 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         </div>
       )}
 
-      {/* Botões de destino diretos — sempre visíveis no card novo, sem precisar expandir */}
+      {/* Botões de destino — card novo: todos exceto coluna atual */}
       {isNew && (
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", padding: "0 10px 9px", borderTop: "1px solid #ede9fe", paddingTop: 7 }}>
-          {colIndex < COLUMNS.length - 1 && (
-            <button onClick={e => { e.stopPropagation(); onMove(task.id, "A fazer"); }} style={{ ...btnS, background: "#eff6ff", color: "#3b82f6", border: "1px solid #bfdbfe", fontWeight: 600 }}>A fazer</button>
-          )}
-          {colIndex < COLUMNS.length - 1 && (
-            <button onClick={e => { e.stopPropagation(); onMove(task.id, "Em andamento"); }} style={{ ...btnS, background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a", fontWeight: 600 }}>Em andamento</button>
-          )}
+        <div style={{ display: "flex", gap: 3, flexWrap: "wrap", padding: "0 10px 9px", borderTop: "1px solid #ede9fe", paddingTop: 7 }}>
+          {COLUMNS.filter(c => c !== task.column).map(c => {
+            const acc = COL_ACCENT[c];
+            return (
+              <button key={c} onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
+                style={{ ...btnS, color: acc, border: `1px solid ${acc}50`, background: `${acc}10`, fontWeight: 600, fontSize: 10 }}>
+                {c}
+              </button>
+            );
+          })}
           <div style={{ flex: 1 }} />
           <button onClick={e => { e.stopPropagation(); setEditing(true); }} style={{ ...btnS, color: "#3b82f6" }}>✏️</button>
           <button onClick={e => { e.stopPropagation(); if(confirm("Arquivar esta tarefa no Notion?")) onDelete(task.id); }} style={{ ...btnS, color: "#ef4444" }} title="Arquiva no Notion">🗑</button>
@@ -531,13 +534,18 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         </div>
       )}
 
-      {/* Inbox (colIndex=0): botões de triagem + reordenação sempre visíveis no card fechado */}
+      {/* Inbox (colIndex=0): todos os destinos possíveis + reordenação, sempre visíveis */}
       {!open && !isNew && colIndex === 0 && (
-        <div style={{ display: "flex", gap: 4, padding: "0 10px 8px", alignItems: "center", flexWrap: "wrap" }}>
-          <button onClick={e => { e.stopPropagation(); onMove(task.id, "A fazer"); }} style={{ ...btnS, background: "#eff6ff", color: "#3b82f6", border: "1px solid #bfdbfe", fontWeight: 600 }}>A fazer</button>
-          <button onClick={e => { e.stopPropagation(); onMove(task.id, "Em andamento"); }} style={{ ...btnS, background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a", fontWeight: 600 }}>Em andamento</button>
-          <button onClick={e => { e.stopPropagation(); onMove(task.id, "Aguardando"); }} style={{ ...btnS, background: "#f5f3ff", color: "#8b5cf6", border: "1px solid #ddd6fe", fontWeight: 600 }}>Aguardando</button>
-          <button onClick={e => { e.stopPropagation(); onMove(task.id, "Algum dia"); }} style={{ ...btnS, background: "#fdf2f8", color: "#ec4899", border: "1px solid #fbcfe8", fontWeight: 600 }}>Algum dia</button>
+        <div style={{ display: "flex", gap: 3, padding: "0 10px 8px", alignItems: "center", flexWrap: "wrap" }}>
+          {COLUMNS.filter(c => c !== task.column).map(c => {
+            const acc = COL_ACCENT[c];
+            return (
+              <button key={c} onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
+                style={{ ...btnS, color: acc, border: `1px solid ${acc}50`, background: `${acc}10`, fontWeight: 600, fontSize: 10 }}>
+                {c}
+              </button>
+            );
+          })}
           <div style={{ flex: 1 }} />
           {onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering} style={{ ...btnS, padding: "2px 7px", opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para cima">{reordering ? "⏳" : "↑"}</button>}
           {onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering} style={{ ...btnS, padding: "2px 7px", opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para baixo">{reordering ? "⏳" : "↓"}</button>}
