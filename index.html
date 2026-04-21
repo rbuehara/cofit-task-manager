@@ -289,6 +289,34 @@ function TagEditor({ tags, allTags, onChange }) {
   );
 }
 
+/* Modal de confirmação para mover para "Aguardando" */
+function AguardandoModal({ onConfirm, onCancel }) {
+  const [text, setText] = useState("");
+  const inputRef = useRef(null);
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 60); }, []);
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}>
+      <div style={{ background: "#fff", borderRadius: 12, padding: "22px 20px", maxWidth: 360, width: "92%", boxShadow: "0 16px 36px rgba(0,0,0,0.16)", animation: "fadeIn 0.15s ease" }}>
+        <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Aguardando o quê?</p>
+        <p style={{ margin: "0 0 14px", fontSize: 11.5, color: "#64748b" }}>Descreva o que está bloqueando esta tarefa.</p>
+        <textarea
+          ref={inputRef}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && text.trim()) { e.preventDefault(); onConfirm(text.trim()); } if (e.key === "Escape") onCancel(); }}
+          placeholder="Ex: retorno da Claudia, aprovação do Bruno Bastos..."
+          rows={3}
+          style={{ ...inp, resize: "vertical", marginBottom: 14, fontSize: 12.5 }}
+        />
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onCancel} style={btnG}>Cancelar</button>
+          <button onClick={() => text.trim() && onConfirm(text.trim())} disabled={!text.trim()} style={{ ...btnP, opacity: text.trim() ? 1 : 0.4 }}>Confirmar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Banner({ status, onDismiss }) {
   if (!status) return null;
   const isErr = status.type === "error";
@@ -414,10 +442,11 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }}>▾</span>
       </div>
 
-      {(task.tags?.length > 0 || task.deadline) && (
+      {(task.tags?.length > 0 || task.deadline || task.aguardando) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 3, padding: "0 10px 7px" }}>
           {(task.tags || []).map(t => <TagChip key={t} tag={t} small />)}
           {task.deadline && !open && <span style={{ fontSize: 9.5, color: overdue ? "#dc2626" : "#64748b", fontWeight: 500, padding: "1px 5px", background: overdue ? "#fef2f2" : "#f8fafc", borderRadius: 3, border: `1px solid ${overdue ? "#fca5a5" : "#e2e8f0"}` }}>📅 {fmtDateShort(task.deadline)}</span>}
+          {task.aguardando && !open && <span style={{ fontSize: 9.5, color: "#8b5cf6", fontWeight: 500, padding: "1px 5px", background: "#f5f3ff", borderRadius: 3, border: "1px solid #ddd6fe", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={task.aguardando}>⏸ {task.aguardando}</span>}
         </div>
       )}
 
@@ -440,6 +469,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         <div style={{ padding: "0 10px 10px", borderTop: "1px solid #f1f5f9", animation: "fadeIn 0.15s ease" }}>
           {/* FIX: whiteSpace e wordBreak para texto longo não truncar */}
           {task.description && <p style={{ fontSize: 11.5, color: "#475569", margin: "8px 0 6px", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{task.description}</p>}
+          {task.aguardando && <p style={{ fontSize: 10.5, color: "#8b5cf6", margin: "0 0 6px", fontWeight: 500, wordBreak: "break-word" }}>⏸ Aguardando: {task.aguardando}</p>}
           {task.reason && <p style={{ fontSize: 10.5, color: "#94a3b8", margin: "0 0 6px", fontStyle: "italic", wordBreak: "break-word" }}>💡 {task.reason}</p>}
           {isDone && task.duration && <p style={{ fontSize: 10.5, color: "#10b981", margin: "0 0 5px" }}>⏱ {task.duration}</p>}
           <div style={{ fontSize: 9.5, color: "#94a3b8", display: "flex", flexWrap: "wrap", gap: "3px 10px", marginBottom: 8 }}>
@@ -585,6 +615,7 @@ function App() {
   const [mobileCol, setMobileCol] = useState(0); // índice da coluna visível no mobile
   const [showMobileAdd, setShowMobileAdd] = useState(false);
   const [reorderingCol, setReorderingCol] = useState(new Set()); // colunas com operação de reordenação em voo
+  const [aguardandoPending, setAguardandoPending] = useState(null); // { id, target } aguardando input do modal
   const allTags = [...new Set(tasks.flatMap(t => t.tags || []))];
 
   function toggleCol(name) {
@@ -651,16 +682,25 @@ function App() {
     setProcessing(null);
   }
 
-  async function handleMove(id, target) {
+  async function handleMove(id, target, extraChanges = {}) {
     const task = tasks.find(t => t.id === id); if (!task) return;
     if (task.column === target) return;
+
+    // "Aguardando" exige texto — abre modal se não veio extraChanges.aguardando
+    if (target === "Aguardando" && extraChanges.aguardando === undefined) {
+      setAguardandoPending({ id, target });
+      return;
+    }
+
     if (id === newCardId) setNewCardId(null); // remove destaque ao mover
 
     const sourceCol = task.column;
-    const changes = { column: target };
+    const changes = { column: target, ...extraChanges };
     if (target === "Em andamento" && !task.startedAt) changes.startedAt = new Date().toISOString();
     if (target === "Concluído") { changes.completedAt = new Date().toISOString(); changes.duration = calcDuration(task.startedAt || task.createdAt, changes.completedAt); }
     if (sourceCol === "Concluído" && target !== "Concluído") { changes.completedAt = null; changes.duration = null; }
+    // Limpa campo aguardando ao sair de "Aguardando"
+    if (sourceCol === "Aguardando" && target !== "Aguardando") changes.aguardando = "";
 
     // Task entra no fim da coluna destino
     const destSize = tasks.filter(t => t.column === target).length;
@@ -668,7 +708,7 @@ function App() {
 
     // Snapshot para rollback
     const snapshot = tasks.map(t => ({ id: t.id, column: t.column, ordem: t.ordem,
-      startedAt: t.startedAt, completedAt: t.completedAt, duration: t.duration }));
+      startedAt: t.startedAt, completedAt: t.completedAt, duration: t.duration, aguardando: t.aguardando }));
 
     // Aplica movimentação local
     let next = tasks.map(t => t.id === id ? { ...t, ...changes } : t);
@@ -835,6 +875,18 @@ function App() {
   return (
     <div>
       {showProfile && <ProfileModal onSave={saveProfile} initial={profile} onClose={profile ? () => setShowProfile(false) : undefined} />}
+
+      {/* ── Modal Aguardando ── */}
+      {aguardandoPending && (
+        <AguardandoModal
+          onConfirm={text => {
+            const { id, target } = aguardandoPending;
+            setAguardandoPending(null);
+            handleMove(id, target, { aguardando: text });
+          }}
+          onCancel={() => setAguardandoPending(null)}
+        />
+      )}
 
       {/* ── Header desktop ── */}
       <header className="desktop-only" style={{ background: "#0f172a", color: "#fff", padding: "10px 18px", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

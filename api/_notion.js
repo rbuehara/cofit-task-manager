@@ -59,6 +59,9 @@ function buildProperties(task) {
   if (task.completedAt !== undefined) {
     props["Concluído em"] = task.completedAt ? { date: { start: task.completedAt } } : { date: null };
   }
+  if (task.aguardando !== undefined) {
+    props["Aguardando"] = { rich_text: [{ text: { content: task.aguardando || "" } }] };
+  }
 
   return props;
 }
@@ -90,6 +93,7 @@ function parsePage(page) {
     createdAt: getDate(p["Criado em"]),
     startedAt: getDate(p["Início execução"]),
     completedAt: getDate(p["Concluído em"]),
+    aguardando: getText(p["Aguardando"]),
   };
 }
 
