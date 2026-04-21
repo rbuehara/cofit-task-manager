@@ -508,7 +508,7 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
   const sorted = [...tasks].sort((a, b) => {
     if (a.id === newCardId) return -1;
     if (b.id === newCardId) return 1;
-    return (a.ordem ?? 999) - (b.ordem ?? 999);
+    return (a.ordem ?? Infinity) - (b.ordem ?? Infinity);
   });
   const visible = isDone && !showAll ? sorted.slice(0, 5) : sorted;
   const hidden = isDone ? sorted.length - visible.length : 0;
@@ -642,17 +642,33 @@ function App() {
     const colTasks = [...tasks.filter(t => t.column === task.column)].sort((a, b) => {
       if (a.id === newCardId) return -1;
       if (b.id === newCardId) return 1;
-      return (a.ordem ?? 999) - (b.ordem ?? 999);
+      return (a.ordem ?? Infinity) - (b.ordem ?? Infinity);
     });
     const idx = colTasks.findIndex(t => t.id === id);
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
     if (swapIdx < 0 || swapIdx >= colTasks.length) return; // já está no limite
 
     const neighbor = colTasks[swapIdx];
-    // Atribui valores de ordem contíguos se ainda não existirem
-    const baseOrder = (i) => colTasks[i].ordem ?? (i + 1) * 10;
-    const myOrder = baseOrder(idx);
-    const neighborOrder = baseOrder(swapIdx);
+
+    // Normaliza a coluna inteira se qualquer task ainda não tem ordem definida.
+    // Isso evita fallbacks baseados em índice que geram números estranhos (ex: 60).
+    const needsNormalization = colTasks.some(t => t.ordem == null);
+    let normalizedTasks = colTasks;
+    if (needsNormalization) {
+      normalizedTasks = colTasks.map((t, i) => ({ ...t, ordem: i + 1 }));
+      // Persiste normalização no Notion (fire-and-forget, sem bloquear UX)
+      normalizedTasks.forEach(t => {
+        api(`/api/tasks/${t.id}`, { method: "PATCH", body: { ordem: t.ordem } }).catch(() => {});
+      });
+      // Atualiza estado local com a normalização
+      setTasks(prev => prev.map(t => {
+        const norm = normalizedTasks.find(n => n.id === t.id);
+        return norm ? { ...t, ordem: norm.ordem } : t;
+      }));
+    }
+
+    const myOrder = normalizedTasks[idx].ordem;
+    const neighborOrder = normalizedTasks[swapIdx].ordem;
 
     // Troca os valores de ordem entre os dois cards
     const myNew = neighborOrder;
@@ -665,7 +681,7 @@ function App() {
       return t;
     }));
 
-    // Persiste no Notion em paralelo
+    // Persiste a troca no Notion
     try {
       await Promise.all([
         api(`/api/tasks/${id}`, { method: "PATCH", body: { ordem: myNew } }),
