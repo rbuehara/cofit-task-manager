@@ -317,8 +317,8 @@ function ProfileModal({ onSave, initial, onClose }) {
   );
 }
 
-function AddForm({ onAdd, busy }) {
-  const [title, setTitle] = useState(""); const [desc, setDesc] = useState(""); const [dl, setDl] = useState(""); const [open, setOpen] = useState(false);
+function AddForm({ onAdd, busy, initialOpen = false }) {
+  const [title, setTitle] = useState(""); const [desc, setDesc] = useState(""); const [dl, setDl] = useState(""); const [open, setOpen] = useState(initialOpen);
   const submit = () => { if (!title.trim() || busy) return; onAdd({ title: title.trim(), description: desc.trim(), deadline: dl || null }); setTitle(""); setDesc(""); setDl(""); setOpen(false); };
   if (!open) return <button onClick={() => setOpen(true)} style={{ ...btnP, fontSize: 12, padding: "7px 14px" }}>+ Nova tarefa</button>;
   return (
@@ -815,8 +815,7 @@ function App() {
         <>
           <div className="mobile-add-backdrop" onClick={() => setShowMobileAdd(false)} />
           <div className="mobile-add-modal">
-            <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Nova tarefa</p>
-            <AddForm onAdd={(data) => { handleAdd(data); setShowMobileAdd(false); }} busy={processing === "new"} />
+            <AddForm onAdd={(data) => { handleAdd(data); setShowMobileAdd(false); }} busy={processing === "new"} initialOpen />
           </div>
         </>
       )}
