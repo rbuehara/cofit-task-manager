@@ -157,10 +157,10 @@ if (!window.AUTH_TOKEN) {
 const { useState, useEffect, useCallback, useRef } = React;
 
 /* ── Constants ── */
-const COLUMNS = ["Backlog", "A fazer", "Em andamento", "Concluído"];
+const COLUMNS = ["Inbox", "A fazer", "Em andamento", "Concluído"];
 const COLLAPSIBLE_COLS = ["Concluído"]; // colunas que podem ser recolhidas (Fase 1.2); mais virão na Fase 3
-const COL_BG = { Backlog: "rgba(100,116,139,0.07)", "A fazer": "rgba(59,130,246,0.07)", "Em andamento": "rgba(245,158,11,0.07)", Concluído: "rgba(16,185,129,0.07)" };
-const COL_ACCENT = { Backlog: "#64748b", "A fazer": "#3b82f6", "Em andamento": "#f59e0b", Concluído: "#10b981" };
+const COL_BG = { Inbox: "rgba(100,116,139,0.07)", "A fazer": "rgba(59,130,246,0.07)", "Em andamento": "rgba(245,158,11,0.07)", Concluído: "rgba(16,185,129,0.07)" };
+const COL_ACCENT = { Inbox: "#64748b", "A fazer": "#3b82f6", "Em andamento": "#f59e0b", Concluído: "#10b981" };
 const TAG_COLORS = {
   ITCD: { bg: "#dbeddb", text: "#1a7a2e", border: "#b8dbb8" },
   IPVA: { bg: "#d3e5ef", text: "#24548d", border: "#a8cee0" },
@@ -447,7 +447,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         </div>
       )}
 
-      {/* Backlog (colIndex=0): botões de destino + reordenação sempre visíveis no card fechado */}
+      {/* Inbox (colIndex=0): botões de destino + reordenação sempre visíveis no card fechado */}
       {!open && !isNew && colIndex === 0 && (
         <div style={{ display: "flex", gap: 4, padding: "0 10px 8px", alignItems: "center" }}>
           <button onClick={e => { e.stopPropagation(); onMove(task.id, "A fazer"); }} style={{ ...btnS, background: "#eff6ff", color: "#3b82f6", border: "1px solid #bfdbfe", fontWeight: 600 }}>A fazer</button>
@@ -587,7 +587,7 @@ function App() {
     try {
       let polished = null;
       try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, profile } }); } catch {}
-      const taskData = { title: polished?.title || title, description: polished?.description || description, tags: polished?.tags || [], deadline, column: "Backlog", createdAt: new Date().toISOString() };
+      const taskData = { title: polished?.title || title, description: polished?.description || description, tags: polished?.tags || [], deadline, column: "Inbox", createdAt: new Date().toISOString() };
       const data = await api("/api/tasks", { method: "POST", body: taskData });
       setTasks(prev => [...prev, data.task]);
       setNewCardId(data.task.id);

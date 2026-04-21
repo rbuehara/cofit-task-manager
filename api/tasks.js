@@ -57,7 +57,7 @@ body.filter = {
 
       const props = buildProperties({
         ...task,
-        column: task.column || "Backlog",
+        column: task.column || "Inbox",
         createdAt: task.createdAt || new Date().toISOString(),
         appId: task.appId || crypto.randomUUID(),
       });

@@ -15,7 +15,7 @@ App pessoal do Rodrigo (Coordenador da COFIT, SEFAZ-MS) para gerenciar tarefas d
 - IA: Claude (Anthropic) — usada para polish de texto e priorização
 - Deploy: Vercel automático a cada push no GitHub
 
-**Colunas atuais:** Backlog, A fazer, Em andamento, Concluído.
+**Colunas atuais:** Inbox, A fazer, Em andamento, Concluído, Aguardando, Snooze, Algum dia.
 
 **Volume atual:** ~86 tarefas no database, ~19 ativas.
 
@@ -87,23 +87,23 @@ Execução **uma mudança por entrega**, Rodrigo testa antes da próxima. Rodrig
 - **0.1** ✅ Script `scripts/backup-notion.js` criado, executado pelo Rodrigo, 86 tarefas salvas em `.json` local.
 - **0.1b** ✅ `.gitignore` criado (protege `.env` e `backups/`).
 
-### Fase 1 — UI sem mexer no Notion (risco zero no banco)
+### Fase 1 — UI sem mexer no Notion (risco zero no banco) ✅ CONCLUÍDA
 
-- **1.1** ⚠️ PARCIAL — remover `maxWidth: 1320px` e `overflowX: auto` do container de colunas. Mudança foi feita por mim na pasta local antiga, mas não foi publicada no GitHub. **Precisa ser refeita na pasta nova clonada** (ver "Estado atual / próxima sessão" abaixo).
-- **1.2** Colunas recolhíveis com pills. Inbox / A fazer / Em andamento sempre visíveis. Demais como pills clicáveis na barra superior, com contador. Estado em `localStorage`.
-- **1.3** Card recém-criado destacado no topo do Inbox até mover/descartar. Botões de destino visíveis diretamente.
-- **1.4** Botões de destino contextuais: sempre visíveis no Inbox (card fechado); só no hover/expandido nas outras.
-- **1.5** Reordenação manual com botões ↑/↓ dentro de cada coluna.
-- **1.6** Mobile: FAB pra criar, dropdown pra trocar coluna.
+- **1.1** ✅ Removidos `maxWidth: 1320px` e `overflowX: auto` — app usa largura total da viewport.
+- **1.2** ✅ Coluna "Concluído" recolhível como pill no header com contador. Estado em `localStorage` (chave `cofit-collapsed`). Constante `COLLAPSIBLE_COLS` prepara extensão para as colunas novas da Fase 3.
+- **1.3** ✅ Card recém-criado vai ao topo do Backlog com badge "NOVA" e botões diretos "A fazer" / "Em andamento". Destaque some ao mover.
+- **1.4** ✅ Backlog: botões de destino sempre visíveis no card fechado. Outras colunas: setas no hover.
+- **1.5** ✅ Reordenação manual com botões ↑/↓ no card fechado (Backlog sempre visível, outras no hover) e no expandido. Persiste via PATCH no campo `priority` do Notion. Dois PATCHes em paralelo com rollback em caso de erro.
+- **1.6** ✅ Mobile (< 640px): header compacto, dropdown de coluna, uma coluna por vez, FAB fixo abre formulário direto. `maximum-scale=1.0` na meta viewport impede zoom automático do iOS em inputs.
 
-### Fase 2 — Schema do Notion
+### Fase 2 — Schema do Notion ✅ CONCLUÍDA
 
-**Importante:** o Notion do app COFIT usa API direta com tokens, **não MCP**. Mudanças de schema em parte são automáveis via script, em parte precisam ser manuais na interface do Notion. Backup já foi feito.
+**Executada via MCP do Cowork (não via script Node).** Resultado idêntico ao planejado.
 
-- **2.1** Script Node que adiciona via API: campos `Snooze até` (Date), `Aguardando` (Rich text), `Ordem` (Number). Não toca no existente.
-- **2.2** Rodrigo adiciona manualmente no select `Status` do Notion as opções: `Inbox`, `Aguardando`, `Snooze`, `Algum dia`. **Sem remover** o "Backlog" ainda. Passar instruções claras.
-- **2.3** Script de migração: todas as tarefas com Status="Backlog" → "Inbox"; copia `Prioridade` para `Ordem`.
-- **2.4** Só após validar 2.3, Rodrigo remove manualmente a opção "Backlog" do select.
+- **2.1** ✅ Campos `Snooze até` (Date), `Aguardando` (Rich text), `Ordem` (Number) adicionados via MCP.
+- **2.2** ✅ Status novos adicionados via MCP: `Inbox` (amarelo), `Aguardando` (roxo), `Snooze` (cinza), `Algum dia` (rosa). "Backlog" preservado neste momento.
+- **2.3** ✅ Migração Backlog → Inbox feita manualmente pelo Rodrigo no Notion (volume era pequeno). Zero tarefas restaram com Status="Backlog". Campo `Ordem` não foi populado em massa — será preenchido gradualmente pelo uso dos botões ↑/↓.
+- **2.4** ✅ Opção "Backlog" removida do select via MCP. Schema final do Status: `A fazer`, `Em andamento`, `Concluído`, `Inbox`, `Aguardando`, `Snooze`, `Algum dia`.
 
 ### Fase 3 — Lógica das novas colunas
 
@@ -131,30 +131,38 @@ Aplicação de nova identidade visual usando a ferramenta de design do Claude. S
 
 ## Estado atual / próxima sessão
 
-**Última etapa confirmada:** Fase 0 completa. Backup OK (86 tarefas, `.json` guardado pelo Rodrigo).
+**Última etapa confirmada:** Fases 1 e 2 completas e validadas. Deploy funcionando via VS Code → GitHub → Vercel.
 
-**Bloqueio do fluxo de trabalho resolvido em parte:** a pasta local original (`cofit-task-manager-main`) foi baixada manualmente do GitHub (sem conexão git). Para publicar mudanças daqui pra frente:
+**Pasta de trabalho:** `cofit-task-manager` (clonada via git). O Cowork está apontado para ela. A pasta `cofit-task-manager-main` é uma cópia OLD sem git — ignorar.
 
-- Rodrigo renomeou pasta original para `cofit-task-manager-main-OLD`.
-- Rodrigo clonou o repositório pela primeira vez via VS Code (`Cmd+Shift+P` → `Git: Clone`) numa pasta nova `cofit-task-manager`.
-- `.env` precisa ser recriado na pasta nova (não vai no GitHub, está no `.gitignore`).
-- **Pendente ação do Rodrigo:** trocar no app Cowork qual pasta está selecionada — apontar para a nova clonada em vez da OLD, pra Claude passar a ver os arquivos certos.
+**Fluxo de trabalho estabelecido (via VS Code):**
+1. Claude edita `index.html` (e arquivos em `api/` quando necessário).
+2. Rodrigo abre VS Code → Source Control → vê diff → escreve mensagem de commit → `Commit` → `Sync Changes`.
+3. Vercel detecta o push e faz deploy automático em ~30s.
+4. Rodrigo testa no navegador, dá feedback, próxima entrega.
 
-**Fluxo de trabalho daqui pra frente (via VS Code):**
-1. Claude edita arquivos na pasta (via ferramentas Edit/Write).
-2. Rodrigo abre VS Code → Source Control (ícone de ramificação na lateral) → vê diff de cada arquivo alterado.
-3. Escreve mensagem de commit, clica `Commit`, depois `Sync Changes` (push).
-4. Vercel detecta o push e faz deploy automático em ~30s.
-5. Rodrigo testa no navegador, dá feedback, próxima entrega.
+**Estado do código relevante para a Fase 3:**
+
+- **Status "Backlog" ainda hardcoded no código.** O `index.html` e os arquivos em `api/` ainda referenciam "Backlog" como valor padrão de status. A primeira entrega da Fase 3 deve substituir todas as ocorrências por "Inbox".
+- **Campo `priority` vs `Ordem`:** A reordenação manual (↑/↓) usa o campo `Prioridade` do Notion. A Fase 3 deve migrar essa lógica para o campo `Ordem` recém-criado. `Prioridade` pode continuar existindo no schema, mas sem uso na UI.
+- **`COLLAPSIBLE_COLS = ["Concluído"]`** — constante no topo do `index.html`. Na Fase 3 adicionar `"Aguardando"`, `"Snooze"`, `"Algum dia"` aqui.
+- **`api/_notion.js`** — função `buildProperties` não conhece os campos novos (`Snooze até`, `Aguardando`, `Ordem`). Precisará ser atualizada para mapeá-los.
+- **`api/tasks.js`** — o GET provavelmente não filtra cards de Snooze. Na Fase 3.3 deve excluir tarefas com `Status="Snooze"` e `Snooze até > hoje`.
+- **Coluna "Concluído"** — ainda renderizada como coluna normal. A Fase 3.6 a transforma em popover no header.
 
 **Próxima ação técnica (ao iniciar nova conversa):**
 
-1. Confirmar que Cowork está apontando pra pasta clonada nova.
-2. Reaplicar **Fase 1.1** na pasta nova:
-   - Em `index.html`, remover `maxWidth: 1320, margin: "0 auto"` do container principal (buscar `maxWidth: 1320`).
-   - Remover `overflowX: "auto"` do container de colunas (buscar `display: "flex", gap: 8, overflowX: "auto"`).
-3. Rodrigo valida o primeiro ciclo commit→push→deploy pra confirmar que fluxo funciona.
-4. Seguir pra Fase 1.2.
+Iniciar **Fase 3**, entrega por entrega na seguinte ordem:
+
+- **3.1a** — Substituir todas as ocorrências de "Backlog" por "Inbox" no código (`index.html` e `api/`). Tarefa cirúrgica e de risco zero — o Notion já não tem mais "Backlog".
+- **3.1b** — Migrar lógica de reordenação de `priority`/`Prioridade` para `ordem`/`Ordem`. Atualizar `buildProperties` e `parsePage` em `api/_notion.js`, e os PATCHes de ↑/↓ no `index.html`.
+- **3.1c** — Renderizar as 6 colunas no grid; adicionar `"Aguardando"`, `"Snooze"`, `"Algum dia"` ao `COLLAPSIBLE_COLS` (recolhidas por padrão).
+- **3.2** — Mover para "Aguardando" abre mini-prompt ("aguardando o quê?"); salva no campo `Aguardando` do Notion.
+- **3.3** — Mover para "Snooze" abre mini-prompt (data); salva em `Snooze até`. GET filtra cards com `Snooze até > hoje`.
+- **3.4** — Ao carregar, cards com `Status="Snooze"` e `Snooze até ≤ hoje` são automaticamente movidos para "Inbox" via PATCH.
+- **3.5** — Alerta visual (borda/ícone) em cards > 3 dias no Inbox.
+- **3.6** — Coluna "Concluído" some do grid; contador clicável no header abre popover das concluídas hoje.
+- **3.7** — Remover botão "Priorizar com IA" da UI principal.
 
 ---
 

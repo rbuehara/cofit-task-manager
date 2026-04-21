@@ -76,7 +76,7 @@ function parsePage(page) {
     url: page.url || "",
     title: getTitle(p["Título"]),
     description: getText(p["Descrição"]),
-    column: getSelect(p["Status"]) || "Backlog",
+    column: getSelect(p["Status"]) || "Inbox",
     tags: getMultiSelect(p["Categoria"]),
     priority: getNumber(p["Prioridade"]),
     reason: getText(p["Justificativa IA"]),
