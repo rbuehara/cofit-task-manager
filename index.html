@@ -308,7 +308,7 @@ function AddForm({ onAdd, busy }) {
 }
 
 /* CHANGED: TaskCard recebe allTags, gerencia eTags, inclui TagEditor no modo edição */
-function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, processing, allTags, isNew }) {
+function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, isNew }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [eT, setET] = useState(task.title);
@@ -409,6 +409,8 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, process
             {colIndex > 0 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex - 1]); }} style={btnS}>← {COLUMNS[colIndex - 1].split(" ").pop()}</button>}
             {colIndex < 3 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex + 1]); }} style={btnS}>{COLUMNS[colIndex + 1].split(" ").pop()} →</button>}
             <div style={{ flex: 1 }} />
+            {!isDone && onReorder && <button onClick={e => { e.stopPropagation(); onReorder(task.id, "up"); }} style={{ ...btnS, padding: "2px 7px" }} title="Mover para cima">↑</button>}
+            {!isDone && onReorder && <button onClick={e => { e.stopPropagation(); onReorder(task.id, "down"); }} style={{ ...btnS, padding: "2px 7px" }} title="Mover para baixo">↓</button>}
             <button onClick={e => { e.stopPropagation(); onImprove(task.id); }} style={{ ...btnS, color: "#4f46e5" }} title="Melhorar com IA">✨</button>
             <button onClick={e => { e.stopPropagation(); setEditing(true); }} style={{ ...btnS, color: "#3b82f6" }}>✏️</button>
             <button onClick={e => { e.stopPropagation(); if(confirm("Arquivar esta tarefa no Notion?")) onDelete(task.id); }} style={{ ...btnS, color: "#ef4444" }} title="Arquiva no Notion">🗑</button>
@@ -464,7 +466,7 @@ function CollapsiblePill({ name, count, onExpand }) {
 }
 
 /* CHANGED: Column recebe e repassa allTags e newCardId */
-function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, processing, allTags, onCollapse, newCardId }) {
+function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, onCollapse, newCardId }) {
   const [showAll, setShowAll] = useState(false);
   const isDone = name === "Concluído";
 
@@ -491,7 +493,7 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, pr
         )}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "7px 6px 3px", display: "flex", flexDirection: "column", gap: 5 }}>
-        {visible.map(t => <TaskCard key={t.id} task={t} colIndex={colIndex} onMove={onMove} onEdit={onEdit} onDelete={onDelete} onImprove={onImprove} processing={processing} allTags={allTags} isNew={t.id === newCardId} />)}
+        {visible.map(t => <TaskCard key={t.id} task={t} colIndex={colIndex} onMove={onMove} onEdit={onEdit} onDelete={onDelete} onImprove={onImprove} onReorder={onReorder} processing={processing} allTags={allTags} isNew={t.id === newCardId} />)}
         {!tasks.length && <p style={{ fontSize: 11, color: "#cbd5e1", textAlign: "center", padding: 20 }}>Nenhuma tarefa</p>}
         {hidden > 0 && <button onClick={() => setShowAll(true)} style={{ ...btnG, fontSize: 10, padding: "5px 0", textAlign: "center", width: "100%", border: "1px dashed #cbd5e1" }}>+ {hidden} anterior{hidden > 1 ? "es" : ""}</button>}
         {isDone && showAll && sorted.length > 5 && <button onClick={() => setShowAll(false)} style={{ ...btnG, fontSize: 10, padding: "5px 0", textAlign: "center", width: "100%", border: "1px dashed #cbd5e1" }}>Mostrar menos</button>}
@@ -598,6 +600,52 @@ function App() {
     setProcessing(null);
   }
 
+  async function handleReorder(id, direction) {
+    const task = tasks.find(t => t.id === id); if (!task) return;
+    // Pega as tarefas da mesma coluna na ordem visual atual (mesma lógica do Column)
+    const colTasks = [...tasks.filter(t => t.column === task.column)].sort((a, b) => {
+      if (a.id === newCardId) return -1;
+      if (b.id === newCardId) return 1;
+      return (a.priority || 999) - (b.priority || 999);
+    });
+    const idx = colTasks.findIndex(t => t.id === id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= colTasks.length) return; // já está no limite
+
+    const neighbor = colTasks[swapIdx];
+    // Atribui valores de ordem contíguos se ainda não existirem
+    const baseOrder = (i) => colTasks[i].priority ?? (i + 1) * 10;
+    const myOrder = baseOrder(idx);
+    const neighborOrder = baseOrder(swapIdx);
+
+    // Troca os valores de priority entre os dois cards
+    const myNew = neighborOrder;
+    const neighborNew = myOrder;
+
+    // Atualiza local imediatamente (UX responsiva)
+    setTasks(prev => prev.map(t => {
+      if (t.id === id) return { ...t, priority: myNew };
+      if (t.id === neighbor.id) return { ...t, priority: neighborNew };
+      return t;
+    }));
+
+    // Persiste no Notion em paralelo
+    try {
+      await Promise.all([
+        api(`/api/tasks/${id}`, { method: "PATCH", body: { priority: myNew } }),
+        api(`/api/tasks/${neighbor.id}`, { method: "PATCH", body: { priority: neighborNew } }),
+      ]);
+    } catch (e) {
+      // Reverte em caso de erro
+      setTasks(prev => prev.map(t => {
+        if (t.id === id) return { ...t, priority: myOrder };
+        if (t.id === neighbor.id) return { ...t, priority: neighborOrder };
+        return t;
+      }));
+      setBanner({ type: "error", msg: "Erro ao reordenar", detail: e.message });
+    }
+  }
+
   async function handleDelete(id) {
     const task = tasks.find(t => t.id === id); if (!task) return;
     setTasks(prev => prev.filter(t => t.id !== id));
@@ -673,7 +721,7 @@ function App() {
           {COLUMNS.filter(col => !collapsedCols.includes(col)).map((col, _) => {
             const i = COLUMNS.indexOf(col);
             const isCollapsible = COLLAPSIBLE_COLS.includes(col);
-            return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} processing={processing} allTags={allTags} onCollapse={isCollapsible ? () => toggleCol(col) : null} newCardId={newCardId} />;
+            return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} onReorder={handleReorder} processing={processing} allTags={allTags} onCollapse={isCollapsible ? () => toggleCol(col) : null} newCardId={newCardId} />;
           })}
         </div>
       </div>
