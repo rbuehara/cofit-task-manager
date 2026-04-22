@@ -113,13 +113,13 @@ Execução **uma mudança por entrega**, Rodrigo testa antes da próxima. Rodrig
 - **3.2** ✅ Mover para "Aguardando" intercepta `handleMove`, abre `AguardandoModal` (textarea + Enter/Escape). Salva campo `Aguardando` (Rich text) no Notion via `buildProperties`/`parsePage`. Campo exibido em roxo no card fechado (badge truncado com tooltip) e no expandido. Limpo ao sair da coluna.
 - **3.3** ✅ Mover para "Snooze" intercepta `handleMove`, abre `SnoozeModal` (date picker, mínimo = amanhã). Salva campo `Snooze até` (Date) no Notion. GET em `tasks.js` reescrito: exclui Snooze com data futura; inclui Snooze com data vencida ou sem data (para a 3.4 processar). Campo exibido como badge "💤 até DD/MM" no card. Limpo ao sair da coluna.
 - **3.4** ✅ Ao carregar (`fetchTasks`), cards com `Status="Snooze"` e `Snooze até ≤ hoje` são automaticamente movidos para "Inbox" via PATCH. Vencidos entram no **topo do Inbox** (ordem temporária = 0, depois `renumberColumn` normaliza para 1..N) — força re-triagem visível. Renumera também os demais cards do Inbox para fechar/manter sequência. Limpa `snoozeUntil`. Decisão tomada na 3.4: **não criar campo "postergado em"**. Avaliar em ~60 dias se snooze virou muleta; se sim, considerar `snoozeCount` (contador de adiamentos), não timestamp.
-- **3.5** — Alerta visual (borda/ícone) em cards > 3 dias no Inbox.
-- **3.6** — Coluna "Concluído" some do grid; contador clicável no header abre popover das concluídas hoje.
-- **3.7** — Remover botão "Priorizar com IA" da UI principal.
+- **3.5** ✅ Alerta visual em cards envelhecidos no Inbox. Constantes `INBOX_STALE_DAYS = 5` e `INBOX_STALE_COLOR = "#ea580c"` centralizadas no topo do `index.html`. Helpers `isStaleInbox(task)` e `staleDays(createdAt)`. Visual: borda esquerda laranja (prioridade: isNew > overdue > stale > acento da coluna); badge `!` circular antes do título (card fechado e expandido, com tooltip); linha "No Inbox há X dias — aguardando triagem" no card expandido. Restrito a `column === "Inbox"` — outras colunas não afetadas. Threshold escolhido: 5 dias (conservador; ajustável em uma linha).
+- **3.6** ✅ Pulada — pills recolhíveis no header já resolvem a visibilidade do "Concluído". Coluna permanece como está.
+- **3.7** ✅ Removidos da UI: botão "⚡ Priorizar" do header desktop, função `handlePrioritize`, estado `prioritizing`. Campo `Prioridade` preservado no Notion (pode ser útil futuramente). `handleImprove` (✨ por card) e `ProfileModal` (⚙️) mantidos — ainda alimentam o polish de criação/edição.
 
 ### Fase 4 — Opcionais (decidir quando chegar)
 
-- **4.1** Drag-and-drop (se ↑/↓ incomodar).
+- **4.1** Drag-and-drop — avaliado e adiado. API HTML5 nativa é viável para desktop, mas complexidade de feedback visual + ausência de suporte touch não justifica agora. Botões ↑/↓ funcionam bem. Reavaliar se a dor persistir.
 - **4.2** Atalhos de teclado (1–6 pra mover).
 - **4.3** Reavaliar "Algum dia" após ~60 dias.
 
@@ -133,7 +133,7 @@ Aplicação de nova identidade visual usando a ferramenta de design do Claude. S
 
 ## Estado atual / próxima sessão
 
-**Última etapa confirmada:** Fases 1, 2, 3.1a, 3.1b, 3.1c, 3.2, 3.3 e 3.4 concluídas e validadas. Deploy funcionando via VS Code → GitHub → Vercel.
+**Última etapa confirmada:** Fases 1, 2, 3.1a–3.7 concluídas e validadas. Fase 3 encerrada. Deploy funcionando via VS Code → GitHub → Vercel.
 
 **Pasta de trabalho:** `cofit-task-manager` (clonada via git). O Cowork está apontado para ela. A pasta `cofit-task-manager-main` é uma cópia OLD sem git — ignorar.
 
@@ -143,23 +143,20 @@ Aplicação de nova identidade visual usando a ferramenta de design do Claude. S
 3. Vercel detecta o push e faz deploy automático em ~30s.
 4. Rodrigo testa no navegador, dá feedback, próxima entrega.
 
-**Estado do código relevante para continuar a Fase 3:**
+**Estado do código ao encerrar a Fase 3:**
 
-- **`COLUMNS`** = `["Inbox", "A fazer", "Em andamento", "Concluído", "Aguardando", "Snooze", "Algum dia"]` — 7 colunas. "Concluído" ainda é coluna normal; some na 3.6.
-- **`COLLAPSIBLE_COLS`** = `["Concluído", "Aguardando", "Snooze", "Algum dia"]` — recolhidas por padrão. Estado persistido em `localStorage` com chave `cofit-collapsed`. Migração única via flag `cofit-col-migrated`.
-- **`api/_notion.js`** — `buildProperties` e `parsePage` mapeiam: `Ordem`, `Aguardando` (Rich text), `Snooze até` (Date). Campo `Prioridade` ainda mapeado (removido na 3.7).
-- **`api/tasks.js`** — GET filtra: exclui Snooze com data futura; inclui Snooze vencido (para 3.4 processar); inclui Concluído do dia.
-- **`handleMove`** — intercepta "Aguardando" (abre `AguardandoModal`) e "Snooze" (abre `SnoozeModal`). Limpa campos ao sair de cada coluna. `duration` usa `startedAt || createdAt` como fallback — cobre conclusão direta do Inbox.
-- **Campo `Prioridade` (IA)** — ainda no código (`handlePrioritize`, botão "Priorizar"). Remoção na 3.7.
-- **Coluna "Concluído"** — ainda renderizada como coluna normal. Vira popover na 3.6.
+- **`COLUMNS`** = `["Inbox", "A fazer", "Em andamento", "Concluído", "Aguardando", "Snooze", "Algum dia"]` — 7 colunas.
+- **`COLLAPSIBLE_COLS`** = `["Concluído", "Aguardando", "Snooze", "Algum dia"]` — recolhidas por padrão. Estado em `localStorage` (`cofit-collapsed`). Migração única via flag `cofit-col-migrated`.
+- **`INBOX_STALE_DAYS = 5`**, **`INBOX_STALE_COLOR = "#ea580c"`** — constantes de alerta centralizadas no topo.
+- **`api/_notion.js`** — mapeia: `Ordem`, `Aguardando` (Rich text), `Snooze até` (Date), `Prioridade` (mantido no Notion, não usado na UI).
+- **`api/tasks.js`** — GET filtra: exclui Snooze com data futura; inclui Snooze vencido; inclui Concluído do dia.
+- **`handleMove`** — intercepta "Aguardando" (abre `AguardandoModal`) e "Snooze" (abre `SnoozeModal`). Limpa campos ao sair de cada coluna.
+- **`handleImprove`** (✨ por card) e **`ProfileModal`** (⚙️) mantidos — alimentam polish de criação/edição via IA.
+- **`handlePrioritize`** e estado `prioritizing` removidos (3.7).
 
 **Próxima ação técnica (ao iniciar nova conversa):**
 
-Continuar **Fase 3** a partir de **3.5**, entrega por entrega:
-
-- **3.5** — Alerta visual (borda laranja + ícone ⚠️) em cards com mais de 3 dias no Inbox (`createdAt` > 3 dias atrás e `column === "Inbox"`).
-- **3.6** — Coluna "Concluído" some do grid. Contador clicável no header abre popover listando as tarefas concluídas hoje (já disponíveis no `byCols[COL_IDX["Concluído"]]`).
-- **3.7** — Remover botão "Priorizar com IA" da UI principal. Limpar `handlePrioritize`, estado `prioritizing`, e referências ao campo `priority` que sobram no código.
+Fase 3 encerrada. Próximas decisões pendentes são da **Fase 4** (opcionais) e **Fase 5** (redesign visual). Não há ação técnica imediata obrigatória — aguardar direcionamento do Rodrigo.
 
 ---
 

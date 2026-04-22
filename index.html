@@ -5,8 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <title>COFIT Task Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter+Tight:wght@450;500;600&family=Manrope:wght@500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
 <style>
+:root {
+  /* Status — paleta Aurora oficial */
+  --status-inbox:   #9CA3AF;
+  --status-todo:    #3B82F6;
+  --status-doing:   #F59E0B;
+  --status-waiting: #8B5CF6;  /* Aguardando: roxo */
+  --status-snooze:  #06B6D4;  /* Snooze: ciano */
+  --status-done:    #22C55E;
+  --status-someday: #E879A0;
+
+  /* Surfaces (só aplicadas ao board dark) */
+  --au-bg: #0c1224;
+  --au-surface: #1a2240;
+  --au-surface-hi: #222b4d;
+  --au-surface-alt: #0f1730;
+  --au-ink: #eef1f7;
+  --au-ink-mid: #c2cae0;
+  --au-ink-low: #8892ad;
+  --au-ink-faint: #6a7391;
+  --au-hair: #2a3352;
+  --au-hair-soft: #1f284a;
+  --au-overdue: #f59e0b;
+  --au-wait-strong: #f59e0b;
+}
 *, *::before, *::after { box-sizing: border-box; }
 body { margin: 0; font-family: 'DM Sans', sans-serif; background: #f4f5f7; min-height: 100vh; }
 ::-webkit-scrollbar { width: 5px; }
@@ -159,27 +184,46 @@ const { useState, useEffect, useCallback, useRef } = React;
 /* ── Constants ── */
 const COLUMNS = ["Inbox", "A fazer", "Em andamento", "Concluído", "Aguardando", "Snooze", "Algum dia"];
 const COLLAPSIBLE_COLS = ["Concluído", "Aguardando", "Snooze", "Algum dia"]; // recolhidas por padrão (Fase 3.1c)
+/* Aurora: surfaces dark por coluna (color-mix hue do status, 8% sobre --au-bg) */
 const COL_BG = {
-  Inbox:          "rgba(100,116,139,0.07)",
-  "A fazer":      "rgba(59,130,246,0.07)",
-  "Em andamento": "rgba(245,158,11,0.07)",
-  Concluído:      "rgba(16,185,129,0.07)",
-  Aguardando:     "rgba(139,92,246,0.07)",
-  Snooze:         "rgba(148,163,184,0.07)",
-  "Algum dia":    "rgba(236,72,153,0.07)",
+  Inbox:          "color-mix(in oklch, #9CA3AF 6%, #0c1224)",
+  "A fazer":      "color-mix(in oklch, #3B82F6 6%, #0c1224)",
+  "Em andamento": "color-mix(in oklch, #F59E0B 6%, #0c1224)",
+  Concluído:      "color-mix(in oklch, #22C55E 6%, #0c1224)",
+  Aguardando:     "color-mix(in oklch, #8B5CF6 6%, #0c1224)",
+  Snooze:         "color-mix(in oklch, #06B6D4 6%, #0c1224)",
+  "Algum dia":    "color-mix(in oklch, #E879A0 6%, #0c1224)",
 };
 const COL_ACCENT = {
-  Inbox:          "#64748b",
-  "A fazer":      "#3b82f6",
-  "Em andamento": "#f59e0b",
-  Concluído:      "#10b981",
-  Aguardando:     "#8b5cf6",
-  Snooze:         "#94a3b8",
-  "Algum dia":    "#ec4899",
+  Inbox:          "#9CA3AF",
+  "A fazer":      "#3B82F6",
+  "Em andamento": "#F59E0B",
+  Concluído:      "#22C55E",
+  Aguardando:     "#8B5CF6",
+  Snooze:         "#06B6D4",
+  "Algum dia":    "#E879A0",
+};
+/* helpers de pill bg (alpha sobre transparente, p/ usar em fundo dark) */
+const statusBg       = (hex) => `color-mix(in oklch, ${hex} 18%, transparent)`;
+const statusBgStrong = (hex) => `color-mix(in oklch, ${hex} 28%, transparent)`;
+/* Aurora surface tokens (espelham as CSS vars p/ uso em styles inline) */
+const AU = {
+  bg: "#0c1224",
+  surface: "#1a2240",
+  surfaceHi: "#222b4d",
+  surfaceAlt: "#0f1730",
+  ink: "#eef1f7",
+  inkMid: "#c2cae0",
+  inkLow: "#8892ad",
+  inkFaint: "#6a7391",
+  hair: "#2a3352",
+  hairSoft: "#1f284a",
+  overdue: "#f59e0b",
+  waitStrong: "#f59e0b",
 };
 /* ── Alertas de envelhecimento (Fase 3.5) ── */
 const INBOX_STALE_DAYS = 5;          // cards no Inbox mais antigos que isso recebem alerta visual
-const INBOX_STALE_COLOR = "#ea580c"; // laranja — borda esquerda + badge + linha no expandido
+const INBOX_STALE_COLOR = "#F59E0B"; // âmbar Aurora — borda esquerda + badge + linha no expandido
 
 const TAG_COLORS = {
   ITCD: { bg: "#dbeddb", text: "#1a7a2e", border: "#b8dbb8" },
