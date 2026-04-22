@@ -275,7 +275,7 @@ function AuroraBoard({ waitVariant = 'text' }) {
         }}>Task Manager</div>
         <div style={{ height: 16, width: 1, background: AU.hair }} />
 
-        <div style={{ display: 'flex', gap: 22, fontFamily: 'Manrope, sans-serif', fontSize: 15, fontWeight: 500 }}>
+        <div style={{ display: 'flex', gap: 22, fontFamily: 'Manrope, sans-serif', fontSize: 18, fontWeight: 500 }}>
           <span style={{ color: AU.counterActive }}>
             <strong style={{ fontWeight: 700 }}>17</strong>
             <span style={{ opacity: 0.80, marginLeft: 6 }}>ativas</span>
@@ -290,14 +290,14 @@ function AuroraBoard({ waitVariant = 'text' }) {
           </span>
         </div>
 
+        <div style={{ flex: 1 }} />
+
         <button style={{
           background: 'linear-gradient(180deg, #eef1f7, #c8cfe0)', color: AU.bg,
           border: 'none', padding: '7px 15px', borderRadius: 999,
           fontSize: 13, fontWeight: 700, fontFamily: 'Manrope, sans-serif', cursor: 'pointer',
-          letterSpacing: -0.1, marginLeft: 6,
+          letterSpacing: -0.1,
         }}>+ Nova tarefa</button>
-
-        <div style={{ flex: 1 }} />
       </div>
 
       <div style={{ flex: 1, overflow: 'hidden', padding: '24px 28px 0', display: 'flex', gap: 20, alignItems: 'flex-start' }}>
