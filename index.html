@@ -229,8 +229,10 @@ const DEFAULT_TAG_COLOR = { bg: "#e8e8ff", text: "#5b5fc7", border: "#c8c8f0" };
 const getTagColor = (tag) => TAG_COLORS[tag] || DEFAULT_TAG_COLOR;
 
 /* ── Helpers ── */
-const fmtDate = (iso) => { if (!iso) return "—"; try { return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
-const fmtDateShort = (iso) => { if (!iso) return "—"; try { return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); } catch { return iso; } };
+/* Para strings "YYYY-MM-DD" (sem hora), parseia como local para evitar off-by-one de fuso */
+const parseDate = (iso) => { if (!iso) return null; if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) { const [y,m,d] = iso.split("-"); return new Date(y, m-1, d); } return new Date(iso); };
+const fmtDate = (iso) => { if (!iso) return "—"; try { return parseDate(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
+const fmtDateShort = (iso) => { if (!iso) return "—"; try { return parseDate(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); } catch { return iso; } };
 const isOverdue = (dl, col) => dl && col !== "Concluído" && new Date(dl) < new Date();
 const isStaleInbox = (task) => {
   if (task.column !== "Inbox" || !task.createdAt) return false;
