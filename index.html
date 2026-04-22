@@ -619,93 +619,239 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         )}
       </div>
 
-      {/* Botões de destino — card novo: todos exceto coluna atual */}
+      {/* Botões de destino — card novo: pills Aurora */}
       {isNew && (
-        <div style={{ display: "flex", gap: 3, flexWrap: "wrap", padding: "0 10px 9px", borderTop: "1px solid #ede9fe", paddingTop: 7 }}>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", padding: "0 16px 14px", alignItems: "center" }}>
           {COLUMNS.filter(c => c !== task.column).map(c => {
             const acc = COL_ACCENT[c];
             return (
               <button key={c} onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
-                style={{ ...btnS, color: acc, border: `1px solid ${acc}50`, background: `${acc}10`, fontWeight: 600, fontSize: 10 }}>
-                {c}
-              </button>
+                style={{
+                  border: "none", background: statusBg(acc), color: acc,
+                  fontSize: 11, fontWeight: 600, padding: "4px 11px", borderRadius: 999,
+                  cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                }}>{c}</button>
             );
           })}
-          <div style={{ flex: 1 }} />
-          <button onClick={e => { e.stopPropagation(); setEditing(true); }} style={{ ...btnS, color: "#3b82f6" }}>✏️</button>
-          <button onClick={e => { e.stopPropagation(); if(confirm("Arquivar esta tarefa no Notion?")) onDelete(task.id); }} style={{ ...btnS, color: "#ef4444" }} title="Arquiva no Notion">🗑</button>
+          <div style={{ flex: 1, minWidth: 4 }} />
+          <button onClick={e => { e.stopPropagation(); setEditing(true); }}
+            title="Editar"
+            style={{ background: AU.surfaceAlt, border: "none", color: COL_ACCENT["A fazer"],
+              width: 28, height: 26, borderRadius: 6, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+            }}>✎</button>
+          <button onClick={e => { e.stopPropagation(); if (confirm("Arquivar esta tarefa no Notion?")) onDelete(task.id); }}
+            title="Arquivar no Notion"
+            style={{ background: AU.surfaceAlt, border: "none", color: "#f87171",
+              width: 28, height: 26, borderRadius: 6, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+            }}>🗑</button>
         </div>
       )}
 
       {open && (
-        <div style={{ padding: "0 10px 10px", borderTop: "1px solid #f1f5f9", animation: "fadeIn 0.15s ease" }}>
-          {task.description && <p style={{ fontSize: 11.5, color: "#475569", margin: "8px 0 6px", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{task.description}</p>}
-          {task.aguardando && <p style={{ fontSize: 10.5, color: "#8b5cf6", margin: "0 0 6px", fontWeight: 500, wordBreak: "break-word" }}>⏸ Aguardando: {task.aguardando}</p>}
-          {task.snoozeUntil && <p style={{ fontSize: 10.5, color: "#94a3b8", margin: "0 0 6px", fontWeight: 500 }}>💤 Retorna em: {fmtDateShort(task.snoozeUntil)}</p>}
-          {task.reason && <p style={{ fontSize: 10.5, color: "#94a3b8", margin: "0 0 6px", fontStyle: "italic", wordBreak: "break-word" }}>💡 {task.reason}</p>}
-          {isDone && task.duration && <p style={{ fontSize: 10.5, color: "#10b981", margin: "0 0 5px" }}>⏱ {task.duration}</p>}
-          <div style={{ fontSize: 9.5, color: "#94a3b8", display: "flex", flexWrap: "wrap", gap: "3px 10px", marginBottom: stale ? 5 : 8 }}>
-            <span>Criado: {fmtDate(task.createdAt)}</span>
-            {task.startedAt && <span>Início: {fmtDate(task.startedAt)}</span>}
-            {task.completedAt && <span>Concluído: {fmtDate(task.completedAt)}</span>}
-            {task.deadline && <span>Prazo: {fmtDateShort(task.deadline)}</span>}
-          </div>
-          {stale && (
-            <p style={{ fontSize: 10.5, color: INBOX_STALE_COLOR, margin: "0 0 8px", fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
-                width: 14, height: 14, borderRadius: "50%", fontSize: 8, fontWeight: 800,
-                background: "#fff7ed", border: `1.5px solid ${INBOX_STALE_COLOR}60`, flexShrink: 0 }}>!</span>
-              No Inbox há {staleDays(task.createdAt)} dias — aguardando triagem
+        <div style={{ padding: "0 16px 14px", animation: "fadeIn 0.15s ease" }}>
+          {/* Descrição: 13.5px/1.65 justificada, ink-mid */}
+          {task.description && (
+            <p style={{
+              fontSize: 13.5, lineHeight: 1.65, color: AU.inkMid,
+              margin: "0 0 14px", textAlign: "justify", hyphens: "auto",
+              whiteSpace: "pre-wrap", wordBreak: "break-word",
+            }}>{task.description}</p>
+          )}
+
+          {/* Aguardando: linha com ↳ em ink-mid (sem emoji ⏸) */}
+          {task.aguardando && (
+            <p style={{
+              fontSize: 12, color: AU.inkMid, margin: "0 0 12px",
+              wordBreak: "break-word", display: "flex", gap: 6, alignItems: "flex-start",
+            }}>
+              <span style={{ opacity: 0.6, flexShrink: 0 }}>↳</span>
+              <span><span style={{ color: COL_ACCENT.Aguardando, fontWeight: 500 }}>Aguardando:</span> {task.aguardando}</span>
             </p>
           )}
-          {/* Mover para: todos os destinos possíveis exceto a coluna atual */}
-          <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 6 }}>
-            {COLUMNS.filter(c => c !== task.column).map(c => {
-              const acc = COL_ACCENT[c];
-              return (
-                <button key={c} onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
-                  style={{ ...btnS, color: acc, border: `1px solid ${acc}50`, background: `${acc}10`, fontWeight: 600, fontSize: 10 }}>
-                  {c}
-                </button>
-              );
-            })}
+
+          {/* Snooze: pill ciano com ícone zzz */}
+          {task.snoozeUntil && (
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              fontSize: 11.5, color: COL_ACCENT.Snooze, fontWeight: 500,
+              background: statusBg(COL_ACCENT.Snooze),
+              padding: "3px 9px", borderRadius: 999,
+              marginBottom: 12,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3h3.5L3 7h3.5M7.5 6.5h3l-3 3h3"/>
+              </svg>
+              retorna em {fmtDateShort(task.snoozeUntil)}
+            </div>
+          )}
+
+          {/* Reason (quando IA sugeriu) — discreto */}
+          {task.reason && (
+            <p style={{
+              fontSize: 11.5, color: AU.inkFaint, margin: "0 0 12px",
+              fontStyle: "italic", wordBreak: "break-word",
+            }}>💡 {task.reason}</p>
+          )}
+
+          {/* Duration do concluído */}
+          {isDone && task.duration && (
+            <p style={{
+              fontSize: 11.5, color: COL_ACCENT.Concluído, margin: "0 0 10px",
+              fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontWeight: 500,
+            }}>⏱ {task.duration}</p>
+          )}
+
+          {/* Bloco slug/datas em mono sobre surfaceAlt */}
+          <div style={{
+            background: AU.surfaceAlt, padding: "10px 12px", borderRadius: 6,
+            fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+            fontSize: 10.5, color: AU.inkMid, lineHeight: 1.7, marginBottom: 14,
+          }}>
+            <div><span style={{ color: AU.inkLow }}>Criado&nbsp;&nbsp;&nbsp;</span> {fmtDate(task.createdAt)}</div>
+            {task.startedAt && <div><span style={{ color: AU.inkLow }}>Iniciado&nbsp;</span> {fmtDate(task.startedAt)}</div>}
+            {task.completedAt && <div><span style={{ color: AU.inkLow }}>Concluído</span> {fmtDate(task.completedAt)}</div>}
+            {task.deadline && <div><span style={{ color: AU.inkLow }}>Prazo&nbsp;&nbsp;&nbsp;&nbsp;</span> {fmtDateShort(task.deadline)}</div>}
           </div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+
+          {/* Linha âmbar "No Inbox há N dias — aguardando triagem" (opção 1 do brief) */}
+          {stale && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 7, marginBottom: 14,
+              fontSize: 12.5, color: AU.waitStrong, fontWeight: 500,
+            }}>
+              <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <circle cx="6" cy="6" r="4.5"/><path d="M6 3.5v3l1.8 1.2"/>
+              </svg>
+              No Inbox há <strong style={{ fontWeight: 700 }}>{staleDays(task.createdAt)} dias</strong> — aguardando triagem
+            </div>
+          )}
+
+          {/* Mover para: pills Aurora */}
+          <div style={{
+            marginBottom: 12, paddingBottom: 0,
+          }}>
+            <div style={{
+              fontSize: 10, color: AU.inkLow, letterSpacing: 0.8,
+              textTransform: "uppercase", marginBottom: 7, fontWeight: 500,
+              fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+            }}>mover para</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {COLUMNS.filter(c => c !== task.column).map(c => {
+                const acc = COL_ACCENT[c];
+                return (
+                  <button key={c} onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
+                    style={{
+                      border: "none", background: statusBg(acc), color: acc,
+                      fontSize: 11, fontWeight: 600, padding: "4px 11px", borderRadius: 999,
+                      cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                    }}>{c}</button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Toolbar ↑ ↓ ✨ ✏️ 🗑 (snooze vai pela pill ciano acima) */}
+          <div style={{
+            paddingTop: 12, borderTop: `1px solid ${AU.hairSoft}`,
+            display: "flex", gap: 6, color: AU.inkMid, flexWrap: "wrap",
+          }}>
             <div style={{ flex: 1 }} />
-            {!isDone && onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering} style={{ ...btnS, padding: "2px 7px", opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para cima">{reordering ? "⏳" : "↑"}</button>}
-            {!isDone && onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering} style={{ ...btnS, padding: "2px 7px", opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para baixo">{reordering ? "⏳" : "↓"}</button>}
-            <button onClick={e => { e.stopPropagation(); onImprove(task.id); }} style={{ ...btnS, color: "#4f46e5" }} title="Melhorar com IA">✨</button>
-            <button onClick={e => { e.stopPropagation(); setEditing(true); }} style={{ ...btnS, color: "#3b82f6" }}>✏️</button>
-            <button onClick={e => { e.stopPropagation(); if(confirm("Arquivar esta tarefa no Notion?")) onDelete(task.id); }} style={{ ...btnS, color: "#ef4444" }} title="Arquiva no Notion">🗑</button>
+            {!isDone && onReorder && (
+              <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering}
+                title="Mover para cima"
+                style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+                  width: 30, height: 28, borderRadius: 6, fontSize: 13,
+                  cursor: reordering ? "not-allowed" : "pointer", opacity: reordering ? 0.4 : 1, fontFamily: "inherit",
+                }}>{reordering ? "⏳" : "↑"}</button>
+            )}
+            {!isDone && onReorder && (
+              <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering}
+                title="Mover para baixo"
+                style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+                  width: 30, height: 28, borderRadius: 6, fontSize: 13,
+                  cursor: reordering ? "not-allowed" : "pointer", opacity: reordering ? 0.4 : 1, fontFamily: "inherit",
+                }}>{reordering ? "⏳" : "↓"}</button>
+            )}
+            <button onClick={e => { e.stopPropagation(); onImprove(task.id); }}
+              title="Melhorar com IA"
+              style={{ background: AU.surfaceAlt, border: "none", color: "#a5b4fc",
+                width: 30, height: 28, borderRadius: 6, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+              }}>✨</button>
+            <button onClick={e => { e.stopPropagation(); setEditing(true); }}
+              title="Editar"
+              style={{ background: AU.surfaceAlt, border: "none", color: COL_ACCENT["A fazer"],
+                width: 30, height: 28, borderRadius: 6, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+              }}>✎</button>
+            <button onClick={e => { e.stopPropagation(); if (confirm("Arquivar esta tarefa no Notion?")) onDelete(task.id); }}
+              title="Arquivar no Notion"
+              style={{ background: AU.surfaceAlt, border: "none", color: "#f87171",
+                width: 30, height: 28, borderRadius: 6, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+              }}>🗑</button>
           </div>
         </div>
       )}
 
-      {/* Inbox (colIndex=0): todos os destinos possíveis + reordenação, sempre visíveis */}
+      {/* Inbox (colIndex=0): pills Aurora de destino + ↑↓, sempre visíveis */}
       {!open && !isNew && colIndex === 0 && (
-        <div style={{ display: "flex", gap: 3, padding: "0 10px 8px", alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 5, padding: "0 16px 14px", alignItems: "center", flexWrap: "wrap" }}>
           {COLUMNS.filter(c => c !== task.column).map(c => {
             const acc = COL_ACCENT[c];
             return (
               <button key={c} onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
-                style={{ ...btnS, color: acc, border: `1px solid ${acc}50`, background: `${acc}10`, fontWeight: 600, fontSize: 10 }}>
-                {c}
-              </button>
+                style={{
+                  border: "none", background: statusBg(acc), color: acc,
+                  fontSize: 11, fontWeight: 600, padding: "4px 11px", borderRadius: 999,
+                  cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                }}>{c}</button>
             );
           })}
-          <div style={{ flex: 1 }} />
-          {onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering} style={{ ...btnS, padding: "2px 7px", opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para cima">{reordering ? "⏳" : "↑"}</button>}
-          {onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering} style={{ ...btnS, padding: "2px 7px", opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para baixo">{reordering ? "⏳" : "↓"}</button>}
+          <div style={{ flex: 1, minWidth: 4 }} />
+          {onReorder && (
+            <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering}
+              title="Mover para cima"
+              style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+                width: 26, height: 24, borderRadius: 6, fontSize: 12,
+                cursor: reordering ? "not-allowed" : "pointer", opacity: reordering ? 0.4 : 1, fontFamily: "inherit",
+              }}>{reordering ? "⏳" : "↑"}</button>
+          )}
+          {onReorder && (
+            <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering}
+              title="Mover para baixo"
+              style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+                width: 26, height: 24, borderRadius: 6, fontSize: 12,
+                cursor: reordering ? "not-allowed" : "pointer", opacity: reordering ? 0.4 : 1, fontFamily: "inherit",
+              }}>{reordering ? "⏳" : "↓"}</button>
+          )}
         </div>
       )}
 
-      {/* Outras colunas: setas de coluna + reordenação aparecem só no hover */}
+      {/* Outras colunas: hover-actions (setas ←→ + ↑↓) em tema dark */}
       {!open && !isNew && colIndex > 0 && (
-        <div className="hover-actions" style={{ position: "absolute", right: 6, top: 7, display: "none", gap: 2 }}>
-          <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex - 1]); }} style={{ ...btnS, padding: "2px 5px", fontSize: 9 }}>←</button>
-          {colIndex < COLUMNS.length - 1 && <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex + 1]); }} style={{ ...btnS, padding: "2px 5px", fontSize: 9 }}>→</button>}
-          {onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering} style={{ ...btnS, padding: "2px 5px", fontSize: 9, opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para cima">{reordering ? "⏳" : "↑"}</button>}
-          {onReorder && <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering} style={{ ...btnS, padding: "2px 5px", fontSize: 9, opacity: reordering ? 0.4 : 1, cursor: reordering ? "not-allowed" : "pointer" }} title="Mover para baixo">{reordering ? "⏳" : "↓"}</button>}
+        <div className="hover-actions" style={{ position: "absolute", right: 8, top: 8, display: "none", gap: 3 }}>
+          <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex - 1]); }}
+            style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+              width: 22, height: 20, borderRadius: 5, fontSize: 10, cursor: "pointer", fontFamily: "inherit",
+            }}>←</button>
+          {colIndex < COLUMNS.length - 1 && (
+            <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex + 1]); }}
+              style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+                width: 22, height: 20, borderRadius: 5, fontSize: 10, cursor: "pointer", fontFamily: "inherit",
+              }}>→</button>
+          )}
+          {onReorder && (
+            <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering}
+              style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+                width: 22, height: 20, borderRadius: 5, fontSize: 10,
+                cursor: reordering ? "not-allowed" : "pointer", opacity: reordering ? 0.4 : 1, fontFamily: "inherit",
+              }} title="Mover para cima">{reordering ? "⏳" : "↑"}</button>
+          )}
+          {onReorder && (
+            <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering}
+              style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+                width: 22, height: 20, borderRadius: 5, fontSize: 10,
+                cursor: reordering ? "not-allowed" : "pointer", opacity: reordering ? 0.4 : 1, fontFamily: "inherit",
+              }} title="Mover para baixo">{reordering ? "⏳" : "↓"}</button>
+          )}
         </div>
       )}
     </div>
