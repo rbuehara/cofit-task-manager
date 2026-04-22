@@ -688,7 +688,6 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [processing, setProcessing] = useState(null);
-  const [prioritizing, setPrioritizing] = useState(false);
   const [banner, setBanner] = useState(null);
   const [newCardId, setNewCardId] = useState(null);
   const [mobileCol, setMobileCol] = useState(0); // índice da coluna visível no mobile
@@ -951,23 +950,6 @@ function App() {
     catch (e) { setTasks(prev => [...prev, task]); setBanner({ type: "error", msg: "Erro ao arquivar tarefa", detail: e.message }); }
   }
 
-  async function handlePrioritize() {
-    setPrioritizing(true);
-    try {
-      const active = tasks.filter(t => t.column !== "Concluído");
-      if (!active.length) { setPrioritizing(false); return; }
-      const data = await api("/api/ai-prioritize", { method: "POST", body: { tasks: active, profile } });
-      const priorities = data.priorities || [];
-      if (priorities.length) {
-        const updated = tasks.map(t => { const p = priorities.find(r => r.id === t.id); return p ? { ...t, priority: p.priority, reason: p.reason } : t; });
-        setTasks(updated);
-        for (const p of priorities) { api(`/api/tasks/${p.id}`, { method: "PATCH", body: { priority: p.priority, reason: p.reason } }).catch(() => {}); }
-        setBanner({ type: "success", msg: `${priorities.length} tarefa(s) priorizadas` });
-      }
-    } catch (e) { setBanner({ type: "error", msg: "Erro ao priorizar", detail: e.message }); }
-    setPrioritizing(false);
-  }
-
   function saveProfile(p) { setProfile(p); localStorage.setItem("cofit-profile", JSON.stringify(p)); setShowProfile(false); }
 
   if (loading) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "#64748b" }}>Carregando tarefas do Notion...</div>;
@@ -1062,7 +1044,6 @@ function App() {
         <Banner status={banner} onDismiss={() => setBanner(null)} />
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
           <AddForm onAdd={handleAdd} busy={processing === "new"} />
-          <button onClick={handlePrioritize} disabled={prioritizing || !activeN} style={{ ...btnP, background: "#1e40af", fontSize: 12, padding: "7px 14px", opacity: prioritizing || !activeN ? 0.5 : 1 }}>⚡ {prioritizing ? "..." : "Priorizar"}</button>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {COLUMNS.filter(col => !collapsedCols.includes(col)).map((col) => {
