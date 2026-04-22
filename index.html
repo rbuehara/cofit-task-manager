@@ -177,6 +177,10 @@ const COL_ACCENT = {
   Snooze:         "#94a3b8",
   "Algum dia":    "#ec4899",
 };
+/* ── Alertas de envelhecimento (Fase 3.5) ── */
+const INBOX_STALE_DAYS = 5;          // cards no Inbox mais antigos que isso recebem alerta visual
+const INBOX_STALE_COLOR = "#ea580c"; // laranja — borda esquerda + badge + linha no expandido
+
 const TAG_COLORS = {
   ITCD: { bg: "#dbeddb", text: "#1a7a2e", border: "#b8dbb8" },
   IPVA: { bg: "#d3e5ef", text: "#24548d", border: "#a8cee0" },
@@ -193,6 +197,15 @@ const getTagColor = (tag) => TAG_COLORS[tag] || DEFAULT_TAG_COLOR;
 const fmtDate = (iso) => { if (!iso) return "—"; try { return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
 const fmtDateShort = (iso) => { if (!iso) return "—"; try { return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); } catch { return iso; } };
 const isOverdue = (dl, col) => dl && col !== "Concluído" && new Date(dl) < new Date();
+const isStaleInbox = (task) => {
+  if (task.column !== "Inbox" || !task.createdAt) return false;
+  const msPerDay = 86_400_000;
+  return (Date.now() - new Date(task.createdAt).getTime()) > INBOX_STALE_DAYS * msPerDay;
+};
+const staleDays = (createdAt) => {
+  if (!createdAt) return 0;
+  return Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000);
+};
 const calcDuration = (s, e) => { if (!s || !e) return null; const ms = new Date(e) - new Date(s); if (ms < 0) return null; const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000); return h > 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${h}h ${m}min`; };
 
 /* ── API ── */
@@ -420,6 +433,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
   const isProc = processing === task.id;
   const overdue = isOverdue(task.deadline, task.column);
   const isDone = task.column === "Concluído";
+  const stale = isStaleInbox(task);
 
   useEffect(() => { setET(task.title); setED(task.description); setEDl(task.deadline || ""); setETags(task.tags || []); }, [task.title, task.description, task.deadline, JSON.stringify(task.tags)]);
 
@@ -453,7 +467,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
   } : {};
 
   return (
-    <div className="card-wrap" style={{ ...cardBase(COL_ACCENT[task.column]), ...newStyle, opacity: isProc ? 0.5 : isDone ? 0.72 : 1, position: "relative", borderLeftColor: isNew ? "#4f46e5" : overdue ? "#ef4444" : COL_ACCENT[task.column], transition: "all 0.2s" }}>
+    <div className="card-wrap" style={{ ...cardBase(COL_ACCENT[task.column]), ...newStyle, opacity: isProc ? 0.5 : isDone ? 0.72 : 1, position: "relative", borderLeftColor: isNew ? "#4f46e5" : overdue ? "#ef4444" : stale ? INBOX_STALE_COLOR : COL_ACCENT[task.column], transition: "all 0.2s" }}>
       {isProc && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.8)", borderRadius: 8, zIndex: 2 }}><span style={{ fontSize: 11, color: "#4f46e5", fontWeight: 600 }}>Processando...</span></div>}
 
       {/* Badge "Nova" no card recém-criado */}
@@ -466,6 +480,13 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
 
       <div onClick={() => setOpen(!open)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 10px", cursor: "pointer" }}>
         {priBadge}
+        {stale && (
+          <span title={`No Inbox há ${staleDays(task.createdAt)} dias — aguardando triagem`}
+            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 16, height: 16, borderRadius: "50%", fontSize: 9, fontWeight: 800,
+              background: "#fff7ed", color: INBOX_STALE_COLOR,
+              border: `1.5px solid ${INBOX_STALE_COLOR}60`, flexShrink: 0, lineHeight: 1 }}>!</span>
+        )}
         <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: "#1e293b", lineHeight: 1.35 }}>{task.title}</span>
         {overdue && <span style={{ fontSize: 11, flexShrink: 0 }} title="Prazo vencido">🔴</span>}
         <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }}>▾</span>
@@ -505,12 +526,20 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
           {task.snoozeUntil && <p style={{ fontSize: 10.5, color: "#94a3b8", margin: "0 0 6px", fontWeight: 500 }}>💤 Retorna em: {fmtDateShort(task.snoozeUntil)}</p>}
           {task.reason && <p style={{ fontSize: 10.5, color: "#94a3b8", margin: "0 0 6px", fontStyle: "italic", wordBreak: "break-word" }}>💡 {task.reason}</p>}
           {isDone && task.duration && <p style={{ fontSize: 10.5, color: "#10b981", margin: "0 0 5px" }}>⏱ {task.duration}</p>}
-          <div style={{ fontSize: 9.5, color: "#94a3b8", display: "flex", flexWrap: "wrap", gap: "3px 10px", marginBottom: 8 }}>
+          <div style={{ fontSize: 9.5, color: "#94a3b8", display: "flex", flexWrap: "wrap", gap: "3px 10px", marginBottom: stale ? 5 : 8 }}>
             <span>Criado: {fmtDate(task.createdAt)}</span>
             {task.startedAt && <span>Início: {fmtDate(task.startedAt)}</span>}
             {task.completedAt && <span>Concluído: {fmtDate(task.completedAt)}</span>}
             {task.deadline && <span>Prazo: {fmtDateShort(task.deadline)}</span>}
           </div>
+          {stale && (
+            <p style={{ fontSize: 10.5, color: INBOX_STALE_COLOR, margin: "0 0 8px", fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
+                width: 14, height: 14, borderRadius: "50%", fontSize: 8, fontWeight: 800,
+                background: "#fff7ed", border: `1.5px solid ${INBOX_STALE_COLOR}60`, flexShrink: 0 }}>!</span>
+              No Inbox há {staleDays(task.createdAt)} dias — aguardando triagem
+            </p>
+          )}
           {/* Mover para: todos os destinos possíveis exceto a coluna atual */}
           <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 6 }}>
             {COLUMNS.filter(c => c !== task.column).map(c => {
