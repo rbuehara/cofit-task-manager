@@ -185,16 +185,6 @@ const { useState, useEffect, useCallback, useRef } = React;
 /* ── Constants ── */
 const COLUMNS = ["Inbox", "A fazer", "Em andamento", "Concluído", "Aguardando", "Snooze", "Algum dia"];
 const COLLAPSIBLE_COLS = ["Concluído", "Aguardando", "Snooze", "Algum dia"]; // recolhidas por padrão (Fase 3.1c)
-/* Aurora: surfaces dark por coluna (color-mix hue do status, 8% sobre --au-bg) */
-const COL_BG = {
-  Inbox:          "color-mix(in oklch, #9CA3AF 6%, #0c1224)",
-  "A fazer":      "color-mix(in oklch, #3B82F6 6%, #0c1224)",
-  "Em andamento": "color-mix(in oklch, #F59E0B 6%, #0c1224)",
-  Concluído:      "color-mix(in oklch, #22C55E 6%, #0c1224)",
-  Aguardando:     "color-mix(in oklch, #8B5CF6 6%, #0c1224)",
-  Snooze:         "color-mix(in oklch, #06B6D4 6%, #0c1224)",
-  "Algum dia":    "color-mix(in oklch, #E879A0 6%, #0c1224)",
-};
 const COL_ACCENT = {
   Inbox:          "#9CA3AF",
   "A fazer":      "#3B82F6",
@@ -491,11 +481,6 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
 
   /* CHANGED: save passa tags editadas pelo usuário */
   const save = () => { if (!eT.trim()) return; onEdit(task.id, { title: eT.trim(), description: eD.trim(), deadline: eDl || null, tags: eTags }); setEditing(false); };
-
-  const priBadge = task.ordem != null ? (
-    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 20, height: 20, borderRadius: "50%", fontSize: 10, fontWeight: 700,
-      background: "#f1f5f9", color: "#64748b", border: "1.5px solid #cbd5e1", flexShrink: 0 }}>{task.ordem}</span>
-  ) : null;
 
   if (editing) return (
     <div style={{ ...cardBase(COL_ACCENT[task.column], true), overflow: "visible", padding: 12, marginBottom: 12 }}>
@@ -930,7 +915,7 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "7px 6px 3px", display: "flex", flexDirection: "column", gap: 5 }}>
         {visible.map(t => <TaskCard key={t.id} task={t} colIndex={colIndex} onMove={onMove} onEdit={onEdit} onDelete={onDelete} onImprove={onImprove} onReorder={onReorder} processing={processing} allTags={allTags} isNew={t.id === newCardId} reordering={reordering} />)}
-        {!tasks.length && <p style={{ fontSize: 11, color: "#cbd5e1", textAlign: "center", padding: 20 }}>Nenhuma tarefa</p>}
+        {!tasks.length && <p style={{ fontSize: 12, color: AU.inkFaint, textAlign: "center", padding: 24, fontStyle: "italic" }}>Nenhuma tarefa</p>}
         {hidden > 0 && <button onClick={() => setShowAll(true)} style={{ ...btnG, fontSize: 10, padding: "5px 0", textAlign: "center", width: "100%", border: "1px dashed #cbd5e1" }}>+ {hidden} anterior{hidden > 1 ? "es" : ""}</button>}
         {isDone && showAll && sorted.length > 5 && <button onClick={() => setShowAll(false)} style={{ ...btnG, fontSize: 10, padding: "5px 0", textAlign: "center", width: "100%", border: "1px dashed #cbd5e1" }}>Mostrar menos</button>}
       </div>
@@ -1231,13 +1216,17 @@ function App() {
 
   function saveProfile(p) { setProfile(p); localStorage.setItem("cofit-profile", JSON.stringify(p)); setShowProfile(false); }
 
-  if (loading) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "#64748b" }}>Carregando tarefas do Notion...</div>;
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: AU.inkMid, background: AU.bg, fontFamily: "Manrope, sans-serif", fontSize: 14 }}>
+      Carregando tarefas do Notion...
+    </div>
+  );
 
   if (loadError) return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", color: "#64748b", gap: 12, padding: 20, textAlign: "center" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", color: AU.inkMid, background: AU.bg, gap: 12, padding: 20, textAlign: "center", fontFamily: "Manrope, sans-serif" }}>
       <span style={{ fontSize: 32 }}>⚠️</span>
-      <p style={{ fontSize: 14, fontWeight: 600, color: "#991b1b" }}>Erro ao carregar tarefas</p>
-      <p style={{ fontSize: 12, color: "#64748b", maxWidth: 400, fontFamily: "monospace" }}>{loadError}</p>
+      <p style={{ fontSize: 14, fontWeight: 600, color: "#f87171" }}>Erro ao carregar tarefas</p>
+      <p style={{ fontSize: 12, color: AU.inkLow, maxWidth: 400, fontFamily: '"JetBrains Mono", ui-monospace, monospace' }}>{loadError}</p>
       <button onClick={fetchTasks} style={btnP}>Tentar novamente</button>
     </div>
   );
