@@ -681,16 +681,30 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
   const hidden = isDone ? sorted.length - visible.length : 0;
   return (
     <div style={{ flex: 1, minWidth: 230, display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 150px)", background: COL_BG[name], borderRadius: 10, padding: "0 0 6px", overflow: "hidden" }}>
+      {/* Header Aurora: título Inter Tight 19/600 + contador Fraunces 28, ambos na cor do status */}
       <div
         onClick={onCollapse || undefined}
         title={onCollapse ? "Clique para recolher" : undefined}
-        style={{ display: "flex", alignItems: "center", gap: 7, padding: "12px 12px 9px", borderBottom: `2px solid ${COL_ACCENT[name]}20`, flexShrink: 0, cursor: onCollapse ? "pointer" : "default" }}
+        style={{
+          display: "flex", alignItems: "baseline", gap: 12,
+          padding: "14px 14px 11px",
+          borderBottom: `1px solid ${AU.hair}`,
+          flexShrink: 0,
+          cursor: onCollapse ? "pointer" : "default",
+        }}
       >
-        <div style={{ width: 9, height: 9, borderRadius: 3, background: COL_ACCENT[name] }} />
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0f172a" }}>{name}</span>
-        <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>{tasks.length}</span>
+        <span style={{
+          fontFamily: '"Inter Tight", Inter, sans-serif',
+          fontSize: 19, fontWeight: 600, letterSpacing: -0.3,
+          color: COL_ACCENT[name], whiteSpace: "nowrap", flex: 1, lineHeight: 1,
+        }}>{name}</span>
+        <span style={{
+          fontFamily: 'Fraunces, serif',
+          fontSize: 28, fontWeight: 500, lineHeight: 0.9, letterSpacing: -1,
+          color: COL_ACCENT[name], fontVariantNumeric: "tabular-nums",
+        }}>{String(tasks.length).padStart(2, "0")}</span>
         {onCollapse && (
-          <span style={{ marginLeft: "auto", color: "#cbd5e1", fontSize: 11, lineHeight: 1, userSelect: "none" }}>⟨</span>
+          <span style={{ color: AU.inkFaint, fontSize: 12, lineHeight: 1, userSelect: "none", marginLeft: 4 }}>⟨</span>
         )}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "7px 6px 3px", display: "flex", flexDirection: "column", gap: 5 }}>
