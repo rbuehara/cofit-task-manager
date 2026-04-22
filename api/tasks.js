@@ -34,7 +34,14 @@ export default async function handler(req, res) {
                 { property: "Concluído em", date: { on_or_after: today } },
               ],
             },
-            // Snooze com data vencida ou sem data (a 3.4 moverá para Inbox)
+            // Snooze ativo (data futura) — aparece na coluna Snooze com indicação de prazo
+            {
+              and: [
+                { property: "Status", select: { equals: "Snooze" } },
+                { property: "Snooze até", date: { after: today } },
+              ],
+            },
+            // Snooze com data vencida ou sem data (já deveria ter voltado para Inbox)
             {
               and: [
                 { property: "Status", select: { equals: "Snooze" } },

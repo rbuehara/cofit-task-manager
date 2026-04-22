@@ -1271,7 +1271,7 @@ function App() {
         <span style={{ fontFamily: "Fraunces, serif", fontSize: 20, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
         <span style={{ fontFamily: "Fraunces, serif", fontSize: 12.5, color: AU.inkMid, fontStyle: "italic", letterSpacing: 0.1 }}>Task Manager</span>
         <div style={{ height: 14, width: 1, background: AU.hair }} />
-        <div style={{ display: "flex", gap: 18, fontFamily: "Manrope, sans-serif", fontSize: 13, fontWeight: 500 }}>
+        <div style={{ display: "flex", gap: 18, fontFamily: "Manrope, sans-serif", fontSize: 17, fontWeight: 500 }}>
           <span style={{ color: COL_ACCENT.Snooze }}>
             <strong style={{ fontWeight: 700 }}>{activeN}</strong>
             <span style={{ opacity: 0.8, marginLeft: 5 }}>ativa{activeN !== 1 ? "s" : ""}</span>
@@ -1286,6 +1286,7 @@ function App() {
           </span>
         </div>
         <div style={{ flex: 1 }} />
+        <AddForm onAdd={handleAdd} busy={processing === "new"} />
         {collapsedCols.filter(c => COLLAPSIBLE_COLS.includes(c)).map(c => {
           const idx = COLUMNS.indexOf(c);
           const count = idx >= 0 ? byCols[idx].length : 0;
@@ -1320,9 +1321,6 @@ function App() {
       {/* ── Conteúdo desktop ── */}
       <div className="desktop-only" style={{ padding: "16px 20px", flexDirection: "column", background: AU.bg, minHeight: "calc(100vh - 42px)" }}>
         <Banner status={banner} onDismiss={() => setBanner(null)} />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-          <AddForm onAdd={handleAdd} busy={processing === "new"} />
-        </div>
         <div style={{ display: "flex", gap: 10 }}>
           {COLUMNS.filter(col => !collapsedCols.includes(col)).map((col) => {
             const i = COLUMNS.indexOf(col);
