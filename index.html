@@ -583,14 +583,8 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
       </div>
 
       <div onClick={() => { if (!suppressClickRef.current) setOpen(!open); }} style={{ padding: "11px 16px 14px", cursor: "pointer" }}>
-        {/* Metadata mono TAREFA — sem número (Fase 4.2: badge removido, task.ordem persiste no Notion) */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          fontSize: 10, color: AU.inkLow, fontVariantNumeric: "tabular-nums",
-          letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 9,
-          fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontWeight: 500,
-        }}>
-          <span>Tarefa</span>
+        {/* Seta de expandir — badge TAREFA·NN removido na Fase 4.2 */}
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 9 }}>
           <span style={{ flex: 1 }} />
           <span style={{ color: AU.inkFaint, fontSize: 10, lineHeight: 1, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }}>▾</span>
         </div>
@@ -1265,8 +1259,8 @@ function App() {
     // Reordenação na mesma coluna via DnD só é permitida com targetIndex explícito
     if (task.column === target && targetIndex === null) return;
 
-    // "Aguardando" exige texto — abre modal se não veio extraChanges.aguardando
-    if (target === "Aguardando" && extraChanges.aguardando === undefined) {
+    // "Aguardando" exige texto — abre modal apenas se o campo ainda não estiver preenchido
+    if (target === "Aguardando" && extraChanges.aguardando === undefined && !task.aguardando) {
       setAguardandoPending({ id, target });
       return;
     }
