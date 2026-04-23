@@ -436,31 +436,6 @@ function Banner({ status, onDismiss }) {
   );
 }
 
-function ProfileModal({ onSave, initial, onClose }) {
-  const [role, setRole] = useState(initial?.role || "");
-  const [areas, setAreas] = useState(initial?.areas || "");
-  const [crit, setCrit] = useState(initial?.criterion || "");
-  const ok = role && areas && crit;
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(6px)" }}>
-      <div style={{ background: "#fff", borderRadius: 14, padding: "28px 24px", maxWidth: 420, width: "92%", boxShadow: "0 20px 40px rgba(0,0,0,0.18)" }}>
-        <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Perfil</h2>
-        <p style={{ margin: "0 0 18px", fontSize: 12, color: "#64748b" }}>Usado pela IA para priorizar melhor.</p>
-        <label style={lbl}>Cargo</label>
-        <select value={role} onChange={e => setRole(e.target.value)} style={inp}><option value="">Selecione...</option>{["Coordenador","Gestor","Auditor","Analista","Executor","Assessor"].map(o => <option key={o}>{o}</option>)}</select>
-        <label style={lbl}>Áreas</label>
-        <textarea value={areas} onChange={e => setAreas(e.target.value)} placeholder="Ex: ITCD, IPVA, gestão de equipe..." rows={2} style={{ ...inp, resize: "vertical" }} />
-        <label style={lbl}>Critério dominante</label>
-        <select value={crit} onChange={e => setCrit(e.target.value)} style={inp}><option value="">Selecione...</option>{["Prazo legal / regulatório","Impacto institucional / político","Volume operacional","Desenvolvimento de equipe","Entrega de projetos"].map(o => <option key={o}>{o}</option>)}</select>
-        <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
-          {initial && <button onClick={onClose} style={{ ...btnG, flex: 1 }}>Cancelar</button>}
-          <button onClick={() => ok && onSave({ role, areas, criterion: crit })} disabled={!ok} style={{ ...btnP, flex: 1, opacity: ok ? 1 : 0.4 }}>Salvar</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function AddForm({ onAdd, busy, initialOpen = false }) {
   const [title, setTitle] = useState(""); const [desc, setDesc] = useState(""); const [dl, setDl] = useState(""); const [open, setOpen] = useState(initialOpen);
   const submit = () => { if (!title.trim() || busy) return; onAdd({ title: title.trim(), description: desc.trim(), deadline: dl || null }); setTitle(""); setDesc(""); setDl(""); setOpen(false); };
@@ -1096,9 +1071,6 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
 /* ── Main App ── */
 function App() {
   const [tasks, setTasks] = useState([]);
-  const [profile, setProfile] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("cofit-profile")); } catch { return null; }
-  });
   const [collapsedCols, setCollapsedCols] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("cofit-collapsed"));
@@ -1118,7 +1090,6 @@ function App() {
       return saved;
     } catch { return COLLAPSIBLE_COLS; }
   });
-  const [showProfile, setShowProfile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [processing, setProcessing] = useState(null);
@@ -1146,7 +1117,6 @@ function App() {
   }
 
   useEffect(() => { fetchTasks(); }, []);
-  useEffect(() => { if (!loading && !profile) setShowProfile(true); }, [loading, profile]);
 
   // Cursor grabbing durante DnD
   useEffect(() => {
@@ -1245,7 +1215,7 @@ function App() {
     setProcessing("new");
     try {
       let polished = null;
-      try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, profile } }); } catch {}
+      try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags } }); } catch {}
       const taskData = { title: polished?.title || title, description: polished?.description || description, tags: polished?.tags || [], deadline, column: "Inbox", createdAt: new Date().toISOString() };
       const data = await api("/api/tasks", { method: "POST", body: taskData });
       setTasks(prev => [...prev, data.task]);
@@ -1376,7 +1346,7 @@ function App() {
     setProcessing(id); const task = tasks.find(t => t.id === id); if (!task) { setProcessing(null); return; }
     try {
       let polished = null;
-      try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, profile } }); } catch {}
+      try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags } }); } catch {}
       const changes = {
         title: polished?.title || title,
         description: polished?.description || description,
@@ -1393,7 +1363,7 @@ function App() {
   async function handleImprove(id) {
     setProcessing(id); const task = tasks.find(t => t.id === id); if (!task) { setProcessing(null); return; }
     try {
-      const polished = await api("/api/ai-polish", { method: "POST", body: { title: task.title, description: task.description, existingTags: allTags, profile } });
+      const polished = await api("/api/ai-polish", { method: "POST", body: { title: task.title, description: task.description, existingTags: allTags } });
       const changes = { title: polished.title || task.title, description: polished.description || task.description, tags: polished.tags || task.tags };
       await api(`/api/tasks/${id}`, { method: "PATCH", body: changes }); updateLocal(id, changes);
     } catch (e) { setBanner({ type: "error", msg: "Erro ao melhorar tarefa", detail: e.message }); }
@@ -1465,7 +1435,6 @@ function App() {
     catch (e) { setTasks(prev => [...prev, task]); setBanner({ type: "error", msg: "Erro ao arquivar tarefa", detail: e.message }); }
   }
 
-  function saveProfile(p) { setProfile(p); localStorage.setItem("cofit-profile", JSON.stringify(p)); setShowProfile(false); }
 
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: AU.inkMid, background: AU.bg, fontFamily: "Manrope, sans-serif", fontSize: 14 }}>
@@ -1499,8 +1468,6 @@ function App() {
 
   return (
     <div>
-      {showProfile && <ProfileModal onSave={saveProfile} initial={profile} onClose={profile ? () => setShowProfile(false) : undefined} />}
-
       {/* ── Modal Aguardando ── */}
       {aguardandoPending && (
         <AguardandoModal
@@ -1553,7 +1520,6 @@ function App() {
         <button onClick={fetchTasks} title="Recarregar do Notion" style={{ padding: "5px 11px", borderRadius: 6, border: `1px solid ${AU.hair}`, background: "transparent", color: AU.inkMid, fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
           <span>🔄</span><span style={{ fontWeight: 600 }}>Recarregar</span>
         </button>
-        <button onClick={() => setShowProfile(true)} style={{ padding: "4px 9px", borderRadius: 6, border: `1px solid ${AU.hair}`, background: "transparent", color: AU.inkMid, fontSize: 12, cursor: "pointer" }}>⚙️</button>
       </header>
 
       {/* ── Header mobile ── */}
@@ -1579,7 +1545,6 @@ function App() {
             title="Buscar"
           >🔍</button>
           <button onClick={fetchTasks} style={{ border: "none", background: "transparent", color: AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>🔄</button>
-          <button onClick={() => setShowProfile(true)} style={{ border: "none", background: "transparent", color: AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>⚙️</button>
         </div>
         {showMobileSearch && (
           <div style={{ width: "100%", paddingBottom: 2 }}>

@@ -1,4 +1,5 @@
 const requireAuth = require("./_auth");
+const { contexto, glossario } = require("./glossary");
 
 export default async function handler(req, res) {
   if (!requireAuth(req, res)) return;
@@ -8,14 +9,21 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   try {
-    const { title, description, existingTags, profile } = req.body;
+    const { title, description, existingTags } = req.body;
     if (!title) return res.status(400).json({ error: "title is required" });
+
+    const glossarioFmt = glossario.map((g) => `- ${g.sigla} = ${g.significado}`).join("\n");
 
     const system = `Você é assistente de produtividade. Tarefas:
 1. Reescrever título (máx 80 chars, claro e conciso).
 2. Reescrever descrição profissionalmente. Se vazia, crie breve baseada no título.
 3. Sugerir 1-3 tags. Uma tarefa pode ter múltiplas áreas.
-Perfil: ${profile?.role || "?"} | ${profile?.areas || "?"} | ${profile?.criterion || "?"}
+
+Contexto do usuário: ${contexto}
+
+Glossário de siglas do usuário (use para ENTENDER o que o usuário escreveu; NÃO altere, NÃO expanda, NÃO "corrija" essas siglas no título ou descrição — mantenha-as exatamente como estão, a menos que o texto original já use a forma expandida):
+${glossarioFmt}
+
 Tags existentes: ${(existingTags || []).join(", ") || "nenhuma"}. Prefira existentes.
 Responda APENAS JSON: {"title":"...","description":"...","tags":["tag1"]}`;
 
