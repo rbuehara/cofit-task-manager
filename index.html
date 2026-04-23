@@ -480,10 +480,11 @@ function AddForm({ onAdd, busy, initialOpen = false }) {
   );
 }
 
-/* CHANGED: TaskCard recebe allTags, gerencia eTags, inclui TagEditor no modo edição */
-function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, isNew, reordering }) {
+/* CHANGED: TaskCard recebe allTags, gerencia eTags, inclui TagEditor no modo edição; 4.2 adiciona DnD */
+function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, isNew, reordering, onDragStart, onDragEnd, isDragging, isMobile }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const suppressClickRef = useRef(false);
   const [eT, setET] = useState(task.title);
   const [eD, setED] = useState(task.description);
   const [eDl, setEDl] = useState(task.deadline || "");
@@ -523,12 +524,34 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
   const isSnoozeCol = task.column === "Snooze";
   const isAguardCol = task.column === "Aguardando";
 
+  const canDrag = !editing && !isProc && !isNew && !isMobile;
+
   return (
-    <div className="card-wrap" style={{ ...cardBase(accent, open), ...newStyle, opacity: isProc ? 0.5 : isDone ? 0.72 : 1, position: "relative", marginBottom: 12, transition: "all 0.2s" }}>
+    <div
+      className="card-wrap"
+      draggable={canDrag}
+      onDragStart={canDrag ? (e) => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", task.id);
+        onDragStart && onDragStart(task.id, task.column);
+      } : undefined}
+      onDragEnd={canDrag ? () => {
+        onDragEnd && onDragEnd();
+        // Suprime o próximo click por 100ms para não abrir/fechar o card após drag
+        suppressClickRef.current = true;
+        setTimeout(() => { suppressClickRef.current = false; }, 100);
+      } : undefined}
+      style={{
+        ...cardBase(accent, open), ...newStyle,
+        opacity: isDragging ? 0.35 : isProc ? 0.5 : isDone ? 0.72 : 1,
+        position: "relative", marginBottom: 12, transition: "opacity 0.15s",
+        cursor: canDrag ? "grab" : "default",
+      }}
+    >
       {isProc && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(12,18,36,0.72)", borderRadius: 10, zIndex: 2 }}><span style={{ fontSize: 11, color: AU.ink, fontWeight: 600 }}>Processando...</span></div>}
 
       {/* Top strip Aurora: dot + barra + (badge atrasado|stale|nova) */}
-      <div onClick={() => setOpen(!open)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px 0", cursor: "pointer" }}>
+      <div onClick={() => { if (!suppressClickRef.current) setOpen(!open); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px 0", cursor: "pointer" }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: stripColor, boxShadow: `0 0 0 3px ${stripColor}22`, flexShrink: 0 }} />
         <div style={{ flex: 1, height: 2.5, borderRadius: 2, background: stripColor, opacity: 0.9 }} />
         {isNew && (
@@ -559,15 +582,15 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         )}
       </div>
 
-      <div onClick={() => setOpen(!open)} style={{ padding: "11px 16px 14px", cursor: "pointer" }}>
-        {/* Metadata mono TAREFA · NN (usa task.ordem se disponível; senão omite numeração) */}
+      <div onClick={() => { if (!suppressClickRef.current) setOpen(!open); }} style={{ padding: "11px 16px 14px", cursor: "pointer" }}>
+        {/* Metadata mono TAREFA — sem número (Fase 4.2: badge removido, task.ordem persiste no Notion) */}
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
           fontSize: 10, color: AU.inkLow, fontVariantNumeric: "tabular-nums",
           letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 9,
           fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontWeight: 500,
         }}>
-          <span>Tarefa{task.ordem != null ? ` · ${String(task.ordem).padStart(2, "0")}` : ""}</span>
+          <span>Tarefa</span>
           <span style={{ flex: 1 }} />
           <span style={{ color: AU.inkFaint, fontSize: 10, lineHeight: 1, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }}>▾</span>
         </div>
@@ -961,10 +984,23 @@ function CollapsiblePill({ name, count, onExpand }) {
   );
 }
 
-/* CHANGED: Column recebe e repassa allTags e newCardId */
-function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, onCollapse, newCardId, reordering }) {
+/* ── DropIndicator: linha fina na cor da coluna ── */
+function DropIndicator({ accent }) {
+  return (
+    <div style={{
+      height: 2, background: accent, borderRadius: 1,
+      boxShadow: `0 0 6px ${accent}88`,
+      margin: "2px 0", pointerEvents: "none",
+    }} />
+  );
+}
+
+/* CHANGED: Column recebe e repassa allTags, newCardId; 4.2 adiciona DnD */
+function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, onCollapse, newCardId, reordering, dragging, onDropTargetChange, dropTarget, onDrop, isMobile, onDragStart, onDragEnd }) {
   const [showAll, setShowAll] = useState(false);
+  const containerRef = useRef(null);
   const isDone = name === "Concluído";
+  const accent = COL_ACCENT[name];
 
   /* Card novo sempre no topo; demais ordenados por prioridade */
   const sorted = [...tasks].sort((a, b) => {
@@ -974,8 +1010,43 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
   });
   const visible = isDone && !showAll ? sorted.slice(0, 5) : sorted;
   const hidden = isDone ? sorted.length - visible.length : 0;
+
+  /* Calcula índice de inserção baseado na posição Y do mouse */
+  function computeDropIndex(clientY) {
+    const container = containerRef.current;
+    if (!container) return visible.length;
+    const cards = Array.from(container.querySelectorAll("[data-card-id]"));
+    for (let i = 0; i < cards.length; i++) {
+      const rect = cards[i].getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) return i;
+    }
+    return cards.length;
+  }
+
+  const isDropTarget = dropTarget?.col === name;
+
   return (
-    <div style={{ flex: 1, minWidth: 240, display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 150px)", background: "transparent", padding: "0 0 6px" }}>
+    <div
+      style={{ flex: 1, minWidth: 240, display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 150px)", background: "transparent", padding: "0 0 6px" }}
+      onDragOver={dragging ? (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const idx = computeDropIndex(e.clientY);
+        if (!isDropTarget || dropTarget?.index !== idx) {
+          onDropTargetChange({ col: name, index: idx });
+        }
+      } : undefined}
+      onDrop={dragging ? (e) => {
+        e.preventDefault();
+        if (!dropTarget) return;
+        onDrop(dragging.id, dragging.sourceCol, dropTarget.col, dropTarget.index);
+      } : undefined}
+      onDragLeave={dragging ? (e) => {
+        if (!containerRef.current?.contains(e.relatedTarget)) {
+          if (isDropTarget) onDropTargetChange(null);
+        }
+      } : undefined}
+    >
       {/* Header Aurora: título Inter Tight 19/600 + contador Fraunces 28, ambos na cor do status */}
       <div
         onClick={onCollapse || undefined}
@@ -983,28 +1054,44 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
         style={{
           display: "flex", alignItems: "baseline", gap: 12,
           padding: "14px 14px 11px",
-          borderBottom: `1px solid ${AU.hair}`,
+          borderBottom: `1px solid ${isDropTarget ? accent + "55" : AU.hair}`,
           flexShrink: 0,
           cursor: onCollapse ? "pointer" : "default",
+          transition: "border-color 0.15s",
         }}
       >
         <span style={{
           fontFamily: '"Inter Tight", Inter, sans-serif',
           fontSize: 19, fontWeight: 600, letterSpacing: -0.3,
-          color: COL_ACCENT[name], whiteSpace: "nowrap", flex: 1, lineHeight: 1,
+          color: accent, whiteSpace: "nowrap", flex: 1, lineHeight: 1,
         }}>{name}</span>
         <span style={{
           fontFamily: 'Fraunces, serif',
           fontSize: 28, fontWeight: 500, lineHeight: 0.9, letterSpacing: -1,
-          color: COL_ACCENT[name], fontVariantNumeric: "tabular-nums",
+          color: accent, fontVariantNumeric: "tabular-nums",
         }}>{String(tasks.length).padStart(2, "0")}</span>
         {onCollapse && (
           <span style={{ color: AU.inkFaint, fontSize: 12, lineHeight: 1, userSelect: "none", marginLeft: 4 }}>⟨</span>
         )}
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "7px 6px 3px", display: "flex", flexDirection: "column", gap: 5 }}>
-        {visible.map(t => <TaskCard key={t.id} task={t} colIndex={colIndex} onMove={onMove} onEdit={onEdit} onDelete={onDelete} onImprove={onImprove} onReorder={onReorder} processing={processing} allTags={allTags} isNew={t.id === newCardId} reordering={reordering} />)}
-        {!tasks.length && <p style={{ fontSize: 12, color: AU.inkFaint, textAlign: "center", padding: 24, fontStyle: "italic" }}>Nenhuma tarefa</p>}
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "7px 6px 3px", display: "flex", flexDirection: "column", gap: 5 }}>
+        {visible.map((t, i) => (
+          <React.Fragment key={t.id}>
+            {isDropTarget && dropTarget.index === i && <DropIndicator accent={accent} />}
+            <div data-card-id={t.id}>
+              <TaskCard
+                task={t} colIndex={colIndex} onMove={onMove} onEdit={onEdit} onDelete={onDelete}
+                onImprove={onImprove} onReorder={onReorder} processing={processing} allTags={allTags}
+                isNew={t.id === newCardId} reordering={reordering}
+                onDragStart={onDragStart} onDragEnd={onDragEnd}
+                isDragging={dragging?.id === t.id}
+                isMobile={isMobile}
+              />
+            </div>
+          </React.Fragment>
+        ))}
+        {isDropTarget && dropTarget.index === visible.length && <DropIndicator accent={accent} />}
+        {!tasks.length && !dragging && <p style={{ fontSize: 12, color: AU.inkFaint, textAlign: "center", padding: 24, fontStyle: "italic" }}>Nenhuma tarefa</p>}
         {hidden > 0 && <button onClick={() => setShowAll(true)} style={{ ...btnG, fontSize: 10, padding: "5px 0", textAlign: "center", width: "100%", border: "1px dashed #cbd5e1" }}>+ {hidden} anterior{hidden > 1 ? "es" : ""}</button>}
         {isDone && showAll && sorted.length > 5 && <button onClick={() => setShowAll(false)} style={{ ...btnG, fontSize: 10, padding: "5px 0", textAlign: "center", width: "100%", border: "1px dashed #cbd5e1" }}>Mostrar menos</button>}
       </div>
@@ -1052,6 +1139,8 @@ function App() {
   const [searchDebounced, setSearchDebounced] = useState("");
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const prevCollapsedRef = useRef(null); // snapshot de collapsedCols antes da busca
+  const [dragging, setDragging] = useState(null); // { id, sourceCol }
+  const [dropTarget, setDropTarget] = useState(null); // { col, index }
   const allTags = [...new Set(tasks.flatMap(t => t.tags || []))];
 
   function toggleCol(name) {
@@ -1064,6 +1153,12 @@ function App() {
 
   useEffect(() => { fetchTasks(); }, []);
   useEffect(() => { if (!loading && !profile) setShowProfile(true); }, [loading, profile]);
+
+  // Cursor grabbing durante DnD
+  useEffect(() => {
+    document.body.style.cursor = dragging ? "grabbing" : "";
+    return () => { document.body.style.cursor = ""; };
+  }, [!!dragging]);
 
   // Debounce da busca: 150ms
   useEffect(() => {
@@ -1165,9 +1260,10 @@ function App() {
     setProcessing(null);
   }
 
-  async function handleMove(id, target, extraChanges = {}) {
+  async function handleMove(id, target, extraChanges = {}, targetIndex = null) {
     const task = tasks.find(t => t.id === id); if (!task) return;
-    if (task.column === target) return;
+    // Reordenação na mesma coluna via DnD só é permitida com targetIndex explícito
+    if (task.column === target && targetIndex === null) return;
 
     // "Aguardando" exige texto — abre modal se não veio extraChanges.aguardando
     if (target === "Aguardando" && extraChanges.aguardando === undefined) {
@@ -1187,40 +1283,61 @@ function App() {
     if (target === "Em andamento" && !task.startedAt) changes.startedAt = new Date().toISOString();
     if (target === "Concluído") { changes.completedAt = new Date().toISOString(); changes.duration = calcDuration(task.startedAt || task.createdAt, changes.completedAt); }
     if (sourceCol === "Concluído" && target !== "Concluído") { changes.completedAt = null; changes.duration = null; }
-    // Limpa campo aguardando ao sair de "Aguardando"
     if (sourceCol === "Aguardando" && target !== "Aguardando") changes.aguardando = "";
-    // Limpa snoozeUntil ao sair de "Snooze"
     if (sourceCol === "Snooze" && target !== "Snooze") changes.snoozeUntil = null;
-
-    // Task entra no fim da coluna destino
-    const destSize = tasks.filter(t => t.column === target).length;
-    changes.ordem = destSize + 1;
 
     // Snapshot para rollback
     const snapshot = tasks.map(t => ({ id: t.id, column: t.column, ordem: t.ordem,
       startedAt: t.startedAt, completedAt: t.completedAt, duration: t.duration,
       aguardando: t.aguardando, snoozeUntil: t.snoozeUntil }));
 
-    // Aplica movimentação local
     let next = tasks.map(t => t.id === id ? { ...t, ...changes } : t);
+    let allPatches = [];
 
-    // Renumera coluna origem para fechar o gap
-    const { updatedTasks: nextAfterRenum, changed: sourceChanged } =
-      renumberColumn(next, sourceCol, newCardId);
-    next = nextAfterRenum;
+    if (targetIndex !== null) {
+      // DnD: insere na posição específica na coluna destino e renumera
+      const destTasks = next
+        .filter(t => t.column === target && t.id !== id)
+        .sort((a, b) => (a.ordem ?? Infinity) - (b.ordem ?? Infinity));
+      const movedTask = next.find(t => t.id === id);
+      destTasks.splice(targetIndex, 0, movedTask);
+      const destOrderById = new Map(destTasks.map((t, i) => [t.id, i + 1]));
+      next = next.map(t => destOrderById.has(t.id) ? { ...t, ordem: destOrderById.get(t.id) } : t);
+      changes.ordem = destOrderById.get(id);
+
+      // Renumera origem (fecha gap), exceto se é a mesma coluna (já renumerada acima)
+      let sourceChanged = [];
+      if (sourceCol !== target) {
+        const renum = renumberColumn(next, sourceCol, newCardId);
+        next = renum.updatedTasks;
+        sourceChanged = renum.changed;
+      }
+
+      allPatches = [
+        api(`/api/tasks/${id}`, { method: "PATCH", body: changes }),
+        ...destTasks
+          .filter(t => t.id !== id)
+          .map(t => api(`/api/tasks/${t.id}`, { method: "PATCH", body: { ordem: destOrderById.get(t.id) } })),
+        ...sourceChanged.map(c => api(`/api/tasks/${c.id}`, { method: "PATCH", body: { ordem: c.ordem } })),
+      ];
+    } else {
+      // Caminho clássico: task vai para o fim da coluna destino
+      const destSize = tasks.filter(t => t.column === target).length;
+      changes.ordem = destSize + 1;
+      next = tasks.map(t => t.id === id ? { ...t, ...changes } : t);
+      const { updatedTasks: nextAfterRenum, changed: sourceChanged } = renumberColumn(next, sourceCol, newCardId);
+      next = nextAfterRenum;
+
+      allPatches = [
+        api(`/api/tasks/${id}`, { method: "PATCH", body: changes }),
+        ...sourceChanged.map(c => api(`/api/tasks/${c.id}`, { method: "PATCH", body: { ordem: c.ordem } })),
+      ];
+    }
 
     setTasks(next);
 
-    // Persiste: move principal + renumerações da origem
-    const patches = [
-      api(`/api/tasks/${id}`, { method: "PATCH", body: changes }),
-      ...sourceChanged.map(c =>
-        api(`/api/tasks/${c.id}`, { method: "PATCH", body: { ordem: c.ordem } })
-      ),
-    ];
-
     try {
-      await Promise.all(patches);
+      await Promise.all(allPatches);
     } catch (e) {
       setTasks(prev => prev.map(t => {
         const snap = snapshot.find(s => s.id === t.id);
@@ -1228,6 +1345,36 @@ function App() {
       }));
       setBanner({ type: "error", msg: "Erro ao mover tarefa", detail: e.message });
     }
+  }
+
+  /* Handlers de DnD para passar ao Column */
+  function handleDragStart(id, sourceCol) {
+    setDragging({ id, sourceCol });
+  }
+
+  function handleDragEnd() {
+    setDragging(null);
+    setDropTarget(null);
+  }
+
+  function handleDrop(id, sourceCol, targetCol, targetIdx) {
+    // Bloqueia se coluna está em operação de reordenação em voo
+    if (reorderingCol.has(sourceCol) || reorderingCol.has(targetCol)) {
+      setDragging(null); setDropTarget(null);
+      return;
+    }
+    // No-op: mesma posição na mesma coluna
+    const colTasks = tasks
+      .filter(t => t.column === sourceCol)
+      .sort((a, b) => (a.ordem ?? Infinity) - (b.ordem ?? Infinity));
+    const currentIdx = colTasks.findIndex(t => t.id === id);
+    if (sourceCol === targetCol && (targetIdx === currentIdx || targetIdx === currentIdx + 1)) {
+      setDragging(null); setDropTarget(null);
+      return;
+    }
+    handleMove(id, targetCol, {}, targetIdx);
+    setDragging(null);
+    setDropTarget(null);
   }
 
   /* CHANGED: handleEdit agora recebe tags do formulário e as usa diretamente */
@@ -1461,7 +1608,7 @@ function App() {
               const isCollapsible = COLLAPSIBLE_COLS.includes(col);
               // Durante busca: oculta colunas sem resultados (exceto Inbox e A fazer, sempre visíveis)
               if (searchDebounced && byCols[i].length === 0 && col !== "Inbox" && col !== "A fazer") return null;
-              return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} onReorder={handleReorder} processing={processing} allTags={allTags} onCollapse={searchDebounced ? null : (isCollapsible ? () => toggleCol(col) : null)} newCardId={newCardId} reordering={reorderingCol.has(col)} />;
+              return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} onReorder={handleReorder} processing={processing} allTags={allTags} onCollapse={searchDebounced ? null : (isCollapsible ? () => toggleCol(col) : null)} newCardId={newCardId} reordering={reorderingCol.has(col)} dragging={dragging} onDropTargetChange={setDropTarget} dropTarget={dropTarget} onDrop={handleDrop} onDragStart={handleDragStart} onDragEnd={handleDragEnd} isMobile={false} />;
             })}
           </div>
         )}
@@ -1484,6 +1631,13 @@ function App() {
           onCollapse={null}
           newCardId={newCardId}
           reordering={reorderingCol.has(COLUMNS[mobileCol])}
+          dragging={null}
+          onDropTargetChange={() => {}}
+          dropTarget={null}
+          onDrop={() => {}}
+          onDragStart={null}
+          onDragEnd={null}
+          isMobile={true}
         />
       </div>
 
