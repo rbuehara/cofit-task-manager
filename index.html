@@ -228,6 +228,20 @@ const TAG_COLORS = {
 const DEFAULT_TAG_COLOR = { bg: "#e8e8ff", text: "#5b5fc7", border: "#c8c8f0" };
 const getTagColor = (tag) => TAG_COLORS[tag] || DEFAULT_TAG_COLOR;
 
+/* ── Search helpers ── */
+const norm = (s) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+function taskMatches(task, query) {
+  if (!query) return true;
+  const q = norm(query);
+  const haystack = [
+    task.title,
+    task.description,
+    (task.tags || []).join(" "),
+    task.aguardando,
+  ].map(norm).join(" ");
+  return haystack.includes(q);
+}
+
 /* ── Helpers ── */
 /* Para strings "YYYY-MM-DD" (sem hora), parseia como local para evitar off-by-one de fuso */
 const parseDate = (iso) => { if (!iso) return null; if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) { const [y,m,d] = iso.split("-"); return new Date(y, m-1, d); } return new Date(iso); };
@@ -846,6 +860,79 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
   );
 }
 
+/* ── SearchInput ── */
+function SearchInput({ value, onChange, count, mobile }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const h = (e) => {
+      if (
+        (e.key === "/" || (e.ctrlKey && e.key === "k")) &&
+        document.activeElement.tagName !== "INPUT" &&
+        document.activeElement.tagName !== "TEXTAREA"
+      ) {
+        e.preventDefault();
+        ref.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+
+  const hasText = value.length > 0;
+
+  return (
+    <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+        <span style={{ position: "absolute", left: 8, fontSize: 12, color: AU.inkFaint, pointerEvents: "none", lineHeight: 1 }}>🔍</span>
+        <input
+          ref={ref}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Escape") { onChange(""); ref.current?.blur(); }
+          }}
+          placeholder={mobile ? "Buscar..." : "Buscar (/ ou Ctrl+K)..."}
+          style={{
+            padding: "5px 28px 5px 26px",
+            borderRadius: 6,
+            border: `1.5px solid ${hasText ? COL_ACCENT["Em andamento"] + "88" : AU.hair}`,
+            background: AU.surface,
+            color: AU.ink,
+            fontSize: 12,
+            fontFamily: "inherit",
+            outline: "none",
+            width: mobile ? "100%" : 220,
+            boxSizing: "border-box",
+            transition: "border-color 0.15s",
+          }}
+        />
+        {hasText && (
+          <button
+            onClick={() => { onChange(""); ref.current?.focus(); }}
+            style={{
+              position: "absolute", right: 5,
+              background: "transparent", border: "none", color: AU.inkFaint,
+              fontSize: 14, cursor: "pointer", padding: "0 2px", lineHeight: 1,
+              display: "flex", alignItems: "center",
+            }}
+            title="Limpar busca"
+          >✕</button>
+        )}
+      </div>
+      {hasText && (
+        <span style={{
+          fontSize: 11, color: count > 0 ? COL_ACCENT["A fazer"] : AU.inkFaint,
+          fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+          fontWeight: 600, whiteSpace: "nowrap",
+        }}>
+          {count > 0 ? `${count} encontrada${count !== 1 ? "s" : ""}` : "0 encontradas"}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /* ── CollapsiblePill: exibida no header quando uma coluna está recolhida ── */
 function CollapsiblePill({ name, count, onExpand }) {
   const accent = COL_ACCENT[name];
@@ -961,6 +1048,10 @@ function App() {
   const [reorderingCol, setReorderingCol] = useState(new Set()); // colunas com operação de reordenação em voo
   const [aguardandoPending, setAguardandoPending] = useState(null); // { id, target } aguardando input do modal
   const [snoozePending, setSnoozePending] = useState(null); // { id, target } aguardando data do snooze
+  const [search, setSearch] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const prevCollapsedRef = useRef(null); // snapshot de collapsedCols antes da busca
   const allTags = [...new Set(tasks.flatMap(t => t.tags || []))];
 
   function toggleCol(name) {
@@ -973,6 +1064,23 @@ function App() {
 
   useEffect(() => { fetchTasks(); }, []);
   useEffect(() => { if (!loading && !profile) setShowProfile(true); }, [loading, profile]);
+
+  // Debounce da busca: 150ms
+  useEffect(() => {
+    const t = setTimeout(() => setSearchDebounced(search), 150);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Expande/restaura colunas durante busca
+  useEffect(() => {
+    if (searchDebounced && prevCollapsedRef.current === null) {
+      prevCollapsedRef.current = collapsedCols;
+      setCollapsedCols([]);
+    } else if (!searchDebounced && prevCollapsedRef.current !== null) {
+      setCollapsedCols(prevCollapsedRef.current);
+      prevCollapsedRef.current = null;
+    }
+  }, [searchDebounced]);
 
   // Renumera sequencialmente (1..N) as tasks de uma coluna.
   // Retorna { updatedTasks, changed } onde `changed` contém só as tasks cujo valor de ordem mudou.
@@ -1233,11 +1341,17 @@ function App() {
     </div>
   );
 
-  const byCols = COLUMNS.map(c => tasks.filter(t => t.column === c));
+  // Busca: filtra tasks quando há query ativa (exclui Concluído da busca)
+  const filteredTasks = searchDebounced
+    ? tasks.filter(t => t.column !== "Concluído" && taskMatches(t, searchDebounced))
+    : tasks;
+  const searchResultCount = searchDebounced ? filteredTasks.length : 0;
+
+  const byCols = COLUMNS.map(c => filteredTasks.filter(t => t.column === c));
   const COL_IDX = Object.fromEntries(COLUMNS.map((c, i) => [c, i])); // { Inbox:0, "A fazer":1, … }
   const activeN = tasks.filter(t => t.column !== "Concluído").length;
-  const doingN = byCols[COL_IDX["Em andamento"]].length;
-  const doneToday = byCols[COL_IDX["Concluído"]].filter(t => t.completedAt && new Date(t.completedAt).toDateString() === new Date().toDateString()).length;
+  const doingN = tasks.filter(t => t.column === "Em andamento").length;
+  const doneToday = tasks.filter(t => t.column === "Concluído" && t.completedAt && new Date(t.completedAt).toDateString() === new Date().toDateString()).length;
 
   /* Colunas disponíveis no mobile: todas (incluindo as "recolhidas" no desktop, que no mobile entram no dropdown) */
   const mobileColName = COLUMNS[mobileCol] || COLUMNS[0];
@@ -1287,11 +1401,12 @@ function App() {
             <span style={{ opacity: 0.8, marginLeft: 5 }}>concluída{doneToday !== 1 ? "s" : ""} hoje</span>
           </span>
         </div>
+        <SearchInput value={search} onChange={setSearch} count={searchResultCount} mobile={false} />
         <AddForm onAdd={handleAdd} busy={processing === "new"} />
         <div style={{ flex: 1 }} />
-        {collapsedCols.filter(c => COLLAPSIBLE_COLS.includes(c)).map(c => {
+        {!searchDebounced && collapsedCols.filter(c => COLLAPSIBLE_COLS.includes(c)).map(c => {
           const idx = COLUMNS.indexOf(c);
-          const count = idx >= 0 ? byCols[idx].length : 0;
+          const count = idx >= 0 ? tasks.filter(t => t.column === c).length : 0;
           return <CollapsiblePill key={c} name={c} count={count} onExpand={() => toggleCol(c)} />;
         })}
         <button onClick={fetchTasks} title="Recarregar do Notion" style={{ padding: "5px 11px", borderRadius: 6, border: `1px solid ${AU.hair}`, background: "transparent", color: AU.inkMid, fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
@@ -1301,35 +1416,55 @@ function App() {
       </header>
 
       {/* ── Header mobile ── */}
-      <header className="mobile-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderBottom: `1px solid ${AU.hair}` }}>
-        <span style={{ fontFamily: "Fraunces, serif", fontSize: 18, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
-        <div style={{ flex: 1 }}>
-          <select
-            value={mobileCol}
-            onChange={e => setMobileCol(Number(e.target.value))}
-            style={{ width: "100%", background: AU.surface, color: AU.ink, border: `1px solid ${AU.hair}`, borderRadius: 6, padding: "5px 8px", fontSize: 13, fontFamily: "inherit", fontWeight: 600 }}
-          >
-            {COLUMNS.map((col, i) => (
-              <option key={col} value={i} style={{ background: AU.surface, color: AU.ink }}>
-                {col} ({byCols[i].length})
-              </option>
-            ))}
-          </select>
+      <header className="mobile-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderBottom: `1px solid ${AU.hair}`, flexDirection: "column" }}>
+        <div style={{ display: "flex", width: "100%", alignItems: "center", gap: 10 }}>
+          <span style={{ fontFamily: "Fraunces, serif", fontSize: 18, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
+          <div style={{ flex: 1 }}>
+            <select
+              value={mobileCol}
+              onChange={e => setMobileCol(Number(e.target.value))}
+              style={{ width: "100%", background: AU.surface, color: AU.ink, border: `1px solid ${AU.hair}`, borderRadius: 6, padding: "5px 8px", fontSize: 13, fontFamily: "inherit", fontWeight: 600 }}
+            >
+              {COLUMNS.map((col, i) => (
+                <option key={col} value={i} style={{ background: AU.surface, color: AU.ink }}>
+                  {col} ({tasks.filter(t => t.column === col).length})
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={() => { setShowMobileSearch(s => !s); if (showMobileSearch) setSearch(""); }}
+            style={{ border: "none", background: search ? statusBg(COL_ACCENT["A fazer"]) : "transparent", color: search ? COL_ACCENT["A fazer"] : AU.inkMid, fontSize: 18, padding: "2px 6px", lineHeight: 1, cursor: "pointer", borderRadius: 6 }}
+            title="Buscar"
+          >🔍</button>
+          <button onClick={fetchTasks} style={{ border: "none", background: "transparent", color: AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>🔄</button>
+          <button onClick={() => setShowProfile(true)} style={{ border: "none", background: "transparent", color: AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>⚙️</button>
         </div>
-        <button onClick={fetchTasks} style={{ border: "none", background: "transparent", color: AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>🔄</button>
-        <button onClick={() => setShowProfile(true)} style={{ border: "none", background: "transparent", color: AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>⚙️</button>
+        {showMobileSearch && (
+          <div style={{ width: "100%", paddingBottom: 2 }}>
+            <SearchInput value={search} onChange={setSearch} count={searchResultCount} mobile={true} />
+          </div>
+        )}
       </header>
 
       {/* ── Conteúdo desktop ── */}
       <div className="desktop-only" style={{ padding: "16px 20px", flexDirection: "column", background: AU.bg, minHeight: "calc(100vh - 42px)" }}>
         <Banner status={banner} onDismiss={() => setBanner(null)} />
-        <div style={{ display: "flex", gap: 10 }}>
-          {COLUMNS.filter(col => !collapsedCols.includes(col)).map((col) => {
-            const i = COLUMNS.indexOf(col);
-            const isCollapsible = COLLAPSIBLE_COLS.includes(col);
-            return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} onReorder={handleReorder} processing={processing} allTags={allTags} onCollapse={isCollapsible ? () => toggleCol(col) : null} newCardId={newCardId} reordering={reorderingCol.has(col)} />;
-          })}
-        </div>
+        {searchDebounced && filteredTasks.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: AU.inkLow, fontSize: 14 }}>
+            Nenhuma task encontrada para <strong style={{ color: AU.ink }}>"{searchDebounced}"</strong>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 10 }}>
+            {COLUMNS.filter(col => !collapsedCols.includes(col)).map((col) => {
+              const i = COLUMNS.indexOf(col);
+              const isCollapsible = COLLAPSIBLE_COLS.includes(col);
+              // Durante busca: oculta colunas sem resultados (exceto Inbox e A fazer, sempre visíveis)
+              if (searchDebounced && byCols[i].length === 0 && col !== "Inbox" && col !== "A fazer") return null;
+              return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} onReorder={handleReorder} processing={processing} allTags={allTags} onCollapse={searchDebounced ? null : (isCollapsible ? () => toggleCol(col) : null)} newCardId={newCardId} reordering={reorderingCol.has(col)} />;
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Conteúdo mobile ── */}
