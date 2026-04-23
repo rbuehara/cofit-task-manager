@@ -550,10 +550,10 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
     >
       {isProc && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(12,18,36,0.72)", borderRadius: 10, zIndex: 2 }}><span style={{ fontSize: 11, color: AU.ink, fontWeight: 600 }}>Processando...</span></div>}
 
-      {/* Top strip Aurora: dot + barra (encurtada) + badges + seta — tudo numa linha */}
+      {/* Top strip Aurora: dot + barra até a borda direita do conteúdo + badges */}
       <div onClick={() => { if (!suppressClickRef.current) setOpen(!open); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px 0", cursor: "pointer" }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: stripColor, boxShadow: `0 0 0 3px ${stripColor}22`, flexShrink: 0 }} />
-        <div style={{ flex: 1, maxWidth: 48, height: 2.5, borderRadius: 2, background: stripColor, opacity: 0.9 }} />
+        <div style={{ flex: 1, height: 2.5, borderRadius: 2, background: stripColor, opacity: 0.9 }} />
         {isNew && (
           <span style={{
             display: "inline-flex", alignItems: "center", whiteSpace: "nowrap",
@@ -580,8 +580,6 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
               padding: "1px 7px", borderRadius: 999,
             }}>{staleDays(task.createdAt)}d no Inbox</span>
         )}
-        <span style={{ flex: 1 }} />
-        <span style={{ color: AU.inkFaint, fontSize: 10, lineHeight: 1, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }}>▾</span>
       </div>
 
       <div onClick={() => { if (!suppressClickRef.current) setOpen(!open); }} style={{ padding: "6px 16px 14px", cursor: "pointer" }}>
