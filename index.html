@@ -550,10 +550,10 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
     >
       {isProc && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(12,18,36,0.72)", borderRadius: 10, zIndex: 2 }}><span style={{ fontSize: 11, color: AU.ink, fontWeight: 600 }}>Processando...</span></div>}
 
-      {/* Top strip Aurora: dot + barra + (badge atrasado|stale|nova) */}
-      <div onClick={() => { if (!suppressClickRef.current) setOpen(!open); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px 0", cursor: "pointer" }}>
+      {/* Top strip Aurora: dot + barra (encurtada) + badges + seta — tudo numa linha */}
+      <div onClick={() => { if (!suppressClickRef.current) setOpen(!open); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px 0", cursor: "pointer" }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: stripColor, boxShadow: `0 0 0 3px ${stripColor}22`, flexShrink: 0 }} />
-        <div style={{ flex: 1, height: 2.5, borderRadius: 2, background: stripColor, opacity: 0.9 }} />
+        <div style={{ flex: 1, maxWidth: 48, height: 2.5, borderRadius: 2, background: stripColor, opacity: 0.9 }} />
         {isNew && (
           <span style={{
             display: "inline-flex", alignItems: "center", whiteSpace: "nowrap",
@@ -580,15 +580,11 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
               padding: "1px 7px", borderRadius: 999,
             }}>{staleDays(task.createdAt)}d no Inbox</span>
         )}
+        <span style={{ flex: 1 }} />
+        <span style={{ color: AU.inkFaint, fontSize: 10, lineHeight: 1, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }}>▾</span>
       </div>
 
-      <div onClick={() => { if (!suppressClickRef.current) setOpen(!open); }} style={{ padding: "11px 16px 14px", cursor: "pointer" }}>
-        {/* Seta de expandir — badge TAREFA·NN removido na Fase 4.2 */}
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 9 }}>
-          <span style={{ flex: 1 }} />
-          <span style={{ color: AU.inkFaint, fontSize: 10, lineHeight: 1, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }}>▾</span>
-        </div>
-
+      <div onClick={() => { if (!suppressClickRef.current) setOpen(!open); }} style={{ padding: "6px 16px 14px", cursor: "pointer" }}>
         {/* Título Inter Tight 450/16/1.45 justificado com hyphens */}
         <div style={{
           fontFamily: '"Inter Tight", Inter, sans-serif',
@@ -996,10 +992,16 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
   const isDone = name === "Concluído";
   const accent = COL_ACCENT[name];
 
-  /* Card novo sempre no topo; demais ordenados por prioridade */
+  /* Card novo sempre no topo; Snooze ordenado por snoozeUntil asc; demais por ordem */
+  const isSnooze = name === "Snooze";
   const sorted = [...tasks].sort((a, b) => {
     if (a.id === newCardId) return -1;
     if (b.id === newCardId) return 1;
+    if (isSnooze) {
+      const da = a.snoozeUntil || "9999";
+      const db = b.snoozeUntil || "9999";
+      return da.localeCompare(db);
+    }
     return (a.ordem ?? Infinity) - (b.ordem ?? Infinity);
   });
   const visible = isDone && !showAll ? sorted.slice(0, 5) : sorted;
@@ -1264,8 +1266,8 @@ function App() {
       setAguardandoPending({ id, target });
       return;
     }
-    // "Snooze" exige data — abre modal se não veio extraChanges.snoozeUntil
-    if (target === "Snooze" && extraChanges.snoozeUntil === undefined) {
+    // "Snooze" exige data — abre modal apenas se o campo ainda não estiver preenchido
+    if (target === "Snooze" && extraChanges.snoozeUntil === undefined && !task.snoozeUntil) {
       setSnoozePending({ id, target });
       return;
     }
