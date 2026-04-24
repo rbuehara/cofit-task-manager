@@ -73,7 +73,97 @@ export default async function handler(req, res) {
         cursor = data.next_cursor;
       }
 
-      const tasks = allPages.map(parsePage);
+      let tasks = allPages.map(parsePage);
+
+      // Wake snooze vencido — server-side (idempotente, single-writer):
+      // Move tasks com Status=Snooze e Snooze até <= hoje para Inbox no topo,
+      // limpa Snooze até, e renumera Ordem 1..N do Inbox. Como acontece no
+      // backend, elimina race entre múltiplos clients/abas.
+      const today = new Date().toISOString().split("T")[0];
+      const vencidos = tasks.filter(
+        (t) => t.column === "Snooze" && t.snoozeUntil && t.snoozeUntil <= today
+      );
+
+      if (vencidos.length > 0) {
+        const vencidosIds = new Set(vencidos.map((v) => v.id));
+
+        // Move localmente para Inbox + limpa snoozeUntil + ordem=0 (cabeça do Inbox)
+        let next = tasks.map((t) =>
+          vencidosIds.has(t.id)
+            ? { ...t, column: "Inbox", snoozeUntil: null, ordem: 0 }
+            : t
+        );
+
+        // Renumera coluna Inbox 1..N por ordem ascendente (createdAt como desempate estável)
+        const inboxSorted = next
+          .filter((t) => t.column === "Inbox")
+          .sort((a, b) => {
+            const oa = a.ordem ?? Infinity;
+            const ob = b.ordem ?? Infinity;
+            if (oa !== ob) return oa - ob;
+            return (a.createdAt || "").localeCompare(b.createdAt || "");
+          });
+
+        const newOrderById = new Map();
+        inboxSorted.forEach((t, i) => newOrderById.set(t.id, i + 1));
+
+        next = next.map((t) =>
+          newOrderById.has(t.id) ? { ...t, ordem: newOrderById.get(t.id) } : t
+        );
+
+        // Persiste no Notion. Para os vencidos, patch completo (Status + Snooze até + Ordem).
+        // Para os demais do Inbox, só patcha se Ordem mudou (evita writes desnecessários).
+        const ordemFinalById = newOrderById;
+        const tasksById = new Map(tasks.map((t) => [t.id, t]));
+
+        const patches = [];
+
+        for (const v of vencidos) {
+          patches.push(
+            fetch(`https://api.notion.com/v1/pages/${v.id}`, {
+              method: "PATCH",
+              headers: notionHeaders(),
+              body: JSON.stringify({
+                properties: buildProperties({
+                  column: "Inbox",
+                  snoozeUntil: null,
+                  ordem: ordemFinalById.get(v.id),
+                }),
+              }),
+            })
+          );
+        }
+
+        for (const [id, novaOrdem] of ordemFinalById.entries()) {
+          if (vencidosIds.has(id)) continue;
+          const original = tasksById.get(id);
+          if (!original || original.ordem === novaOrdem) continue;
+          patches.push(
+            fetch(`https://api.notion.com/v1/pages/${id}`, {
+              method: "PATCH",
+              headers: notionHeaders(),
+              body: JSON.stringify({
+                properties: buildProperties({ ordem: novaOrdem }),
+              }),
+            })
+          );
+        }
+
+        // Aguarda todos os PATCHes; loga falhas mas não derruba a request — o
+        // estado local `next` já reflete a intenção, e a próxima query corrige
+        // qualquer divergência.
+        const results = await Promise.allSettled(patches);
+        const failures = results.filter((r) => r.status === "rejected");
+        if (failures.length > 0) {
+          console.error(
+            `wake-snooze: ${failures.length}/${patches.length} PATCHes falharam`,
+            failures.map((f) => f.reason?.message || f.reason)
+          );
+        }
+
+        tasks = next;
+      }
+
       return res.status(200).json({ tasks });
     }
 

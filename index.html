@@ -607,8 +607,8 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         )}
       </div>
 
-      {/* Botões de destino — card novo: pills Aurora */}
-      {isNew && (
+      {/* Botões de destino — card novo: pills Aurora (só quando colapsado; quando aberto, o bloco "mover para" já cobre) */}
+      {isNew && !open && (
         <div style={{ display: "flex", gap: 5, flexWrap: "wrap", padding: "0 16px 14px", alignItems: "center" }}>
           {COLUMNS.filter(c => c !== task.column).map(c => {
             const acc = COL_ACCENT[c];
@@ -1169,38 +1169,10 @@ function App() {
   async function fetchTasks() {
     setLoading(true); setLoadError(null);
     try {
+      // Wake-snooze é feito no backend (api/tasks.js GET) — single-writer,
+      // sem race entre múltiplos clients/abas.
       const data = await api("/api/tasks");
-      let fetched = data.tasks || [];
-
-      // 3.4 — Acorda cards com Snooze vencido: move para Inbox e coloca no topo
-      const today = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
-      const vencidos = fetched.filter(t => t.column === "Snooze" && t.snoozeUntil && t.snoozeUntil <= today);
-      if (vencidos.length > 0) {
-        const vencidosIds = new Set(vencidos.map(v => v.id));
-        // Move localmente para Inbox + limpa snooze. ordem=0 garante que ficam antes
-        // de qualquer card já existente no Inbox; renumberColumn normaliza para 1..N.
-        let next = fetched.map(t =>
-          vencidosIds.has(t.id) ? { ...t, column: "Inbox", snoozeUntil: null, ordem: 0 } : t
-        );
-        const { updatedTasks, changed } = renumberColumn(next, "Inbox", null);
-        next = updatedTasks;
-
-        // Persiste: cada vencido (com ordem final) + renumerações dos outros do Inbox
-        const ordemFinalById = new Map(updatedTasks.map(t => [t.id, t.ordem]));
-        const patches = [
-          ...vencidos.map(t => api(`/api/tasks/${t.id}`, {
-            method: "PATCH",
-            body: { column: "Inbox", snoozeUntil: null, ordem: ordemFinalById.get(t.id) }
-          })),
-          ...changed
-            .filter(c => !vencidosIds.has(c.id))
-            .map(c => api(`/api/tasks/${c.id}`, { method: "PATCH", body: { ordem: c.ordem } }))
-        ];
-        await Promise.all(patches);
-        fetched = next;
-      }
-
-      setTasks(fetched);
+      setTasks(data.tasks || []);
     } catch (e) {
       if (!e.message.includes("expirada")) setLoadError(e.message);
     }
