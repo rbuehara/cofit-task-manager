@@ -43,6 +43,7 @@ button:hover { filter: brightness(0.93); }
 input:focus, textarea:focus, select:focus { border-color: #4f46e5 !important; outline: none; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 .card-wrap:hover .hover-actions { display: flex !important; }
 
 /* ── Mobile layout ── */
@@ -263,6 +264,21 @@ const calcDuration = (s, e) => { if (!s || !e) return null; const ms = new Date(
 // Retorna { days, level } onde level: 0=sem badge, 1=cinza (8-14d), 2=laranja (15-30d), 3=vermelho (31+d)
 // Exclui: Concluído, Snooze, tags com "compras", deadline futura dentro de 14 dias
 const AGING_SILENT_TAGS = ["compras"];
+
+/* ── Tags silenciosas (Fase 6) ── */
+// Defaults por scope
+const SILENT_TAGS_DEFAULTS = { pessoal: ["compras"], trabalho: [] };
+function getSilentTagsKey(scope) { return `cofit-silent-tags-${scope}`; }
+function loadSilentTags(scope) {
+  try {
+    const raw = localStorage.getItem(getSilentTagsKey(scope));
+    if (raw !== null) return JSON.parse(raw);
+  } catch {}
+  return [...(SILENT_TAGS_DEFAULTS[scope] || [])];
+}
+function saveSilentTags(scope, tags) {
+  localStorage.setItem(getSilentTagsKey(scope), JSON.stringify(tags));
+}
 function agingInfo(task) {
   if (!task.lastMovedAt) return { days: 0, level: 0 };
   if (task.column === "Concluído" || task.column === "Snooze") return { days: 0, level: 0 };
@@ -398,6 +414,208 @@ function TagEditor({ tags, allTags, onChange, onAddToGlossary }) {
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ── ShoppingListModal (Fase 6) ─────────────────────────────────────────────── */
+/* Renderiza tasks com tag silenciosa configurada como lista com checkboxes.
+   silentTag: string com a tag usada (ex: "compras").
+   tasks: todas as tasks do scope atual.
+   onComplete(id): move task para Concluído.
+   onAdd(title): cria task nova com a tag silenciada automática.
+   onDelete(id): arquiva task.
+   silentTags: array completo de tags silenciosas (para config).
+   allTags: todas as tags em uso (para o painel de configuração).
+   onSilentTagsChange(newTags): callback ao alterar tags silenciosas.
+*/
+function ShoppingListModal({ scope, tasks, onComplete, onAdd, onDelete, silentTags, allTags, onSilentTagsChange, onClose }) {
+  const [input, setInput] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const inputRef = useRef(null);
+
+  // Filtra tasks que têm pelo menos uma tag silenciosa e não estão concluídas
+  const shoppingTasks = tasks.filter(t =>
+    t.column !== "Concluído" &&
+    (t.tags || []).some(tag => silentTags.map(s => s.toLowerCase()).includes(tag.toLowerCase()))
+  );
+
+  // Agrupa por subtag (ex: "compras/jardim" agrupa em "jardim"; "compras" sem subtag fica em "Geral")
+  const primaryTag = silentTags[0] || "compras";
+  const grouped = {};
+  for (const task of shoppingTasks) {
+    // Encontra a tag silenciosa que está no task (case-insensitive)
+    const matchedSilent = (task.tags || []).find(t => silentTags.map(s => s.toLowerCase()).includes(t.toLowerCase()));
+    // Verifica se há uma subtag do tipo "compras/categoria"
+    const subTag = (task.tags || []).find(t => {
+      const lower = t.toLowerCase();
+      return lower.startsWith(primaryTag.toLowerCase() + "/");
+    });
+    const group = subTag ? subTag.split("/").slice(1).join("/") : "Geral";
+    if (!grouped[group]) grouped[group] = [];
+    grouped[group].push(task);
+  }
+
+  // Ordena grupos: "Geral" por último se houver outros
+  const groupKeys = Object.keys(grouped).sort((a, b) => {
+    if (a === "Geral" && b !== "Geral") return 1;
+    if (b === "Geral" && a !== "Geral") return -1;
+    return a.localeCompare(b);
+  });
+  const hasGroups = groupKeys.length > 1 || (groupKeys.length === 1 && groupKeys[0] !== "Geral");
+
+  async function handleAdd() {
+    const title = input.trim();
+    if (!title || adding) return;
+    setAdding(true);
+    await onAdd(title);
+    setInput("");
+    setAdding(false);
+    setTimeout(() => inputRef.current?.focus(), 80);
+  }
+
+  function toggleSilentTag(tag) {
+    const lower = tag.toLowerCase();
+    const isActive = silentTags.map(s => s.toLowerCase()).includes(lower);
+    if (isActive) {
+      onSilentTagsChange(silentTags.filter(s => s.toLowerCase() !== lower));
+    } else {
+      onSilentTagsChange([...silentTags, tag]);
+    }
+  }
+
+  // Tags do scope atual que ainda não são silenciosas (candidatas a silenciar)
+  const nonSilentTags = allTags.filter(t => !silentTags.map(s => s.toLowerCase()).includes(t.toLowerCase()));
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.65)", display: "flex", alignItems: "flex-start", justifyContent: "flex-end", zIndex: 1100, backdropFilter: "blur(5px)" }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background: AU.surface, width: "min(400px, 96vw)", height: "100vh", display: "flex", flexDirection: "column", boxShadow: "-8px 0 32px rgba(0,0,0,0.4)", animation: "slideIn 0.2s ease", overflowY: "auto" }}>
+        {/* Cabeçalho */}
+        <div style={{ padding: "16px 18px 12px", borderBottom: `1px solid ${AU.hair}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0, background: AU.surfaceAlt }}>
+          <span style={{ fontSize: 20 }}>🛒</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 14, color: AU.ink, letterSpacing: -0.3 }}>Lista de Compras</div>
+            <div style={{ fontSize: 10.5, color: AU.inkFaint, marginTop: 1 }}>
+              {shoppingTasks.length} item{shoppingTasks.length !== 1 ? "s" : ""} • scope: {scope}
+            </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(s => !s)}
+            title="Configurar tags silenciosas"
+            style={{ border: `1px solid ${showConfig ? "#4f46e5" : AU.hair}`, background: showConfig ? "#4f46e524" : "transparent", color: showConfig ? "#a5b4fc" : AU.inkMid, borderRadius: 6, padding: "4px 9px", fontSize: 11, fontFamily: "inherit", cursor: "pointer", fontWeight: 600 }}
+          >⚙ Tags</button>
+          <button onClick={onClose} style={{ border: "none", background: "transparent", color: AU.inkFaint, fontSize: 20, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>×</button>
+        </div>
+
+        {/* Painel de configuração de tags silenciosas */}
+        {showConfig && (
+          <div style={{ padding: "12px 18px", borderBottom: `1px solid ${AU.hair}`, background: AU.surfaceAlt, flexShrink: 0 }}>
+            <div style={{ fontSize: 10.5, color: AU.inkLow, letterSpacing: 0.6, textTransform: "uppercase", fontWeight: 600, marginBottom: 8, fontFamily: '"JetBrains Mono", ui-monospace, monospace' }}>Tags silenciadas no kanban</div>
+            <div style={{ fontSize: 10.5, color: AU.inkFaint, marginBottom: 10 }}>Tasks com estas tags ficam ocultas no kanban e aparecem aqui como lista.</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>
+              {silentTags.map(tag => (
+                <span key={tag} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600, background: "#4f46e524", color: "#a5b4fc", border: "1px solid #4f46e555" }}>
+                  {tag}
+                  <span onClick={() => toggleSilentTag(tag)} style={{ cursor: "pointer", opacity: 0.7, fontSize: 13, lineHeight: 1 }} title="Remover">×</span>
+                </span>
+              ))}
+              {silentTags.length === 0 && <span style={{ fontSize: 11, color: AU.inkFaint, fontStyle: "italic" }}>Nenhuma tag silenciada</span>}
+            </div>
+            {nonSilentTags.length > 0 && (
+              <>
+                <div style={{ fontSize: 10, color: AU.inkFaint, marginBottom: 5 }}>Adicionar ao silêncio:</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {nonSilentTags.map(tag => {
+                    const c = getTagColor(tag);
+                    return (
+                      <span key={tag} onClick={() => toggleSilentTag(tag)} style={{ padding: "2px 7px", borderRadius: 4, fontSize: 10.5, fontWeight: 600, background: c.bg, color: c.text, border: `1px solid ${c.border}`, cursor: "pointer", opacity: 0.8 }} title={`Silenciar "${tag}" no kanban`}>
+                        + {tag}
+                      </span>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Input de criação rápida */}
+        <div style={{ padding: "12px 18px", borderBottom: `1px solid ${AU.hair}`, flexShrink: 0, background: AU.surfaceAlt }}>
+          <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleAdd(); if (e.key === "Escape") onClose(); }}
+              placeholder="Adicionar item..."
+              style={{ flex: 1, padding: "7px 10px", borderRadius: 7, border: `1.5px solid ${AU.hair}`, background: AU.bg, color: AU.ink, fontSize: 13, fontFamily: "inherit", outline: "none", transition: "border-color 0.15s" }}
+              autoFocus
+            />
+            <button
+              onClick={handleAdd}
+              disabled={!input.trim() || adding}
+              style={{ padding: "7px 14px", borderRadius: 7, border: "none", background: "#4f46e5", color: "#fff", fontWeight: 700, fontSize: 12.5, fontFamily: "inherit", cursor: input.trim() && !adding ? "pointer" : "default", opacity: input.trim() && !adding ? 1 : 0.4 }}
+            >{adding ? "..." : "+"}</button>
+          </div>
+        </div>
+
+        {/* Lista de itens */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px" }}>
+          {shoppingTasks.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px 20px", color: AU.inkFaint, fontSize: 13, fontStyle: "italic" }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>🛒</div>
+              Lista vazia! Adicione itens acima.
+            </div>
+          ) : (
+            groupKeys.map(group => (
+              <div key={group}>
+                {hasGroups && (
+                  <div style={{ fontSize: 10, color: AU.inkLow, letterSpacing: 0.7, textTransform: "uppercase", fontWeight: 700, padding: "10px 6px 5px", fontFamily: '"JetBrains Mono", ui-monospace, monospace' }}>{group}</div>
+                )}
+                {grouped[group].map(task => (
+                  <div key={task.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 6px", borderRadius: 8, marginBottom: 2, transition: "background 0.1s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = AU.surfaceHi}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    {/* Checkbox */}
+                    <div
+                      onClick={() => onComplete(task.id)}
+                      style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${AU.hair}`, background: "transparent", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}
+                      title="Marcar como concluído"
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = "#22C55E"; e.currentTarget.style.background = "#22C55E22"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = AU.hair; e.currentTarget.style.background = "transparent"; }}
+                    />
+                    {/* Título */}
+                    <div style={{ flex: 1, fontSize: 13.5, color: AU.ink, lineHeight: 1.4, wordBreak: "break-word" }}>
+                      {task.title}
+                      {/* Tags extras (exceto a tag silenciosa) */}
+                      {(task.tags || []).filter(t => !silentTags.map(s => s.toLowerCase()).includes(t.toLowerCase())).length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 4 }}>
+                          {(task.tags || []).filter(t => !silentTags.map(s => s.toLowerCase()).includes(t.toLowerCase())).map(t => (
+                            <TagChip key={t} tag={t} small />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {/* Botão remover */}
+                    <button
+                      onClick={() => { if (confirm(`Arquivar "${task.title}"?`)) onDelete(task.id); }}
+                      title="Arquivar"
+                      style={{ border: "none", background: "transparent", color: AU.inkFaint, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1, flexShrink: 0, borderRadius: 4 }}
+                      onMouseEnter={e => { e.currentTarget.style.color = "#f87171"; e.currentTarget.style.background = "#f8717122"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = AU.inkFaint; e.currentTarget.style.background = "transparent"; }}
+                    >✕</button>
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1360,6 +1578,9 @@ function App() {
   const [scope, setScope] = useState(() => localStorage.getItem("cofit-scope") || "trabalho");
   const [showGlossary, setShowGlossary] = useState(false);
   const [glossaryPrefill, setGlossaryPrefill] = useState(null); // sigla pré-preenchida ao abrir do atalho inline
+  const [showShopping, setShowShopping] = useState(false); // painel lista de compras
+  const [silentTags, setSilentTagsState] = useState(() => loadSilentTags(localStorage.getItem("cofit-scope") || "trabalho"));
+  const [showSilenced, setShowSilenced] = useState(false); // toggle temporário "mostrar silenciadas"
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [processing, setProcessing] = useState(null);
@@ -1387,7 +1608,12 @@ function App() {
     });
   }
 
-  useEffect(() => { fetchTasks(); fetchRecentCompleted(); }, [scope]);
+  useEffect(() => {
+    fetchTasks();
+    fetchRecentCompleted();
+    setSilentTagsState(loadSilentTags(scope));
+    setShowSilenced(false);
+  }, [scope]);
 
   // Atualiza título da aba conforme scope
   useEffect(() => {
@@ -1492,6 +1718,44 @@ function App() {
 
   function updateLocal(id, changes) {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...changes } : t));
+  }
+
+  // Fase 6: atualiza tags silenciosas e persiste no localStorage
+  function handleSilentTagsChange(newTags) {
+    saveSilentTags(scope, newTags);
+    setSilentTagsState(newTags);
+  }
+
+  // Fase 6: cria item de compra com tag silenciosa automática (sem polish se título curto)
+  async function handleShoppingAdd(title) {
+    const primaryTag = silentTags[0] || "compras";
+    setProcessing("new");
+    try {
+      // Só passa pelo polish se o título tiver mais de 10 palavras
+      let polished = null;
+      if (title.split(/\s+/).length > 10) {
+        try {
+          polished = await api("/api/ai-polish", { method: "POST", body: {
+            title, description: "", existingTags: allTags, scope,
+            activeTasksByTag: buildActiveTasksByTag(tasks),
+            recentCompleted: recentCompleted.slice(0, 20),
+          }});
+        } catch {}
+      }
+      const taskData = {
+        title: polished?.title || title,
+        description: polished?.description || "",
+        // garante que a tag silenciosa esteja presente
+        tags: [...new Set([primaryTag, ...(polished?.tags || [])])],
+        deadline: null,
+        column: "Inbox",
+        createdAt: new Date().toISOString(),
+        scope,
+      };
+      const data = await api("/api/tasks", { method: "POST", body: taskData });
+      setTasks(prev => [...prev, data.task]);
+    } catch (e) { setBanner({ type: "error", msg: "Erro ao criar item de compra", detail: e.message }); }
+    setProcessing(null);
   }
 
   async function handleAdd({ title, description, deadline }) {
@@ -1750,10 +2014,18 @@ function App() {
     </div>
   );
 
+  // Fase 6: filtra tags silenciadas (a menos que "mostrar silenciadas" esteja ativo ou haja busca ativa)
+  const silentTagsLower = silentTags.map(s => s.toLowerCase());
+  const isSilenced = (task) =>
+    !showSilenced &&
+    !searchDebounced &&
+    silentTagsLower.length > 0 &&
+    (task.tags || []).some(t => silentTagsLower.includes(t.toLowerCase()));
+
   // Busca: filtra tasks quando há query ativa (exclui Concluído da busca)
   const filteredTasks = searchDebounced
     ? tasks.filter(t => t.column !== "Concluído" && taskMatches(t, searchDebounced))
-    : tasks;
+    : tasks.filter(t => !isSilenced(t));
   const searchResultCount = searchDebounced ? filteredTasks.length : 0;
 
   const byCols = COLUMNS.map(c => filteredTasks.filter(t => t.column === c));
@@ -1770,8 +2042,30 @@ function App() {
     setShowGlossary(true);
   }
 
+  // Fase 6: contagem de itens silenciados ativos (para badge no botão 🛒)
+  const silencedCount = tasks.filter(t =>
+    t.column !== "Concluído" &&
+    silentTagsLower.length > 0 &&
+    (t.tags || []).some(tag => silentTagsLower.includes(tag.toLowerCase()))
+  ).length;
+
   return (
     <div>
+      {/* ── Modal Lista de Compras (Fase 6) ── */}
+      {showShopping && (
+        <ShoppingListModal
+          scope={scope}
+          tasks={tasks}
+          onComplete={(id) => handleMove(id, "Concluído")}
+          onAdd={handleShoppingAdd}
+          onDelete={handleDelete}
+          silentTags={silentTags}
+          allTags={allTags}
+          onSilentTagsChange={handleSilentTagsChange}
+          onClose={() => setShowShopping(false)}
+        />
+      )}
+
       {/* ── Modal Glossário ── */}
       {showGlossary && (
         <GlossaryModal
@@ -1834,6 +2128,26 @@ function App() {
         <button onClick={() => openGlossaryWithPrefill(null)} title="Glossário" style={{ padding: "5px 11px", borderRadius: 6, border: `1px solid ${AU.hair}`, background: "transparent", color: AU.inkMid, fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
           <span>📖</span><span style={{ fontWeight: 600 }}>Glossário</span>
         </button>
+        {/* Botão Lista de Compras (Fase 6) */}
+        <button
+          onClick={() => setShowShopping(true)}
+          title="Lista de Compras"
+          style={{ position: "relative", padding: "5px 11px", borderRadius: 6, border: `1px solid ${showShopping ? "#d97706" : AU.hair}`, background: showShopping ? "#d9770618" : "transparent", color: showShopping ? "#d97706" : AU.inkMid, fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}
+        >
+          <span>🛒</span>
+          <span style={{ fontWeight: 600 }}>Compras</span>
+          {silencedCount > 0 && (
+            <span style={{ background: "#d97706", color: "#fff", borderRadius: 999, fontSize: 9, fontWeight: 800, padding: "1px 5px", lineHeight: 1.4 }}>{silencedCount}</span>
+          )}
+        </button>
+        {/* Toggle "Mostrar silenciadas" (Fase 6) — só aparece se há tags silenciosas */}
+        {silentTags.length > 0 && (
+          <button
+            onClick={() => setShowSilenced(s => !s)}
+            title={showSilenced ? "Ocultar tags silenciadas no kanban" : "Mostrar silenciadas temporariamente"}
+            style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${showSilenced ? "#8B5CF6" : AU.hair}`, background: showSilenced ? "#8B5CF618" : "transparent", color: showSilenced ? "#8B5CF6" : AU.inkFaint, fontSize: 10.5, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontWeight: showSilenced ? 700 : 500 }}
+          >{showSilenced ? "👁 Silenciadas visíveis" : "👁 Ver silenciadas"}</button>
+        )}
         <SearchInput value={search} onChange={setSearch} count={searchResultCount} mobile={false} />
         <AddForm onAdd={handleAdd} busy={processing === "new"} />
         <div style={{ flex: 1 }} />
@@ -1878,6 +2192,16 @@ function App() {
             title="Buscar"
           >🔍</button>
           <button onClick={() => openGlossaryWithPrefill(null)} title="Glossário" style={{ border: "none", background: "transparent", color: AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>📖</button>
+          <button
+            onClick={() => setShowShopping(true)}
+            title="Lista de Compras"
+            style={{ position: "relative", border: "none", background: "transparent", color: silencedCount > 0 ? "#d97706" : AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}
+          >
+            🛒
+            {silencedCount > 0 && (
+              <span style={{ position: "absolute", top: -2, right: -2, background: "#d97706", color: "#fff", borderRadius: 999, fontSize: 8, fontWeight: 800, padding: "1px 4px", lineHeight: 1.4, minWidth: 14, textAlign: "center" }}>{silencedCount}</span>
+            )}
+          </button>
           <button onClick={fetchTasks} style={{ border: "none", background: "transparent", color: AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>🔄</button>
         </div>
         {showMobileSearch && (
