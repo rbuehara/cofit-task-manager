@@ -10,8 +10,14 @@ function notionHeaders() {
   };
 }
 
-function databaseId() {
-  return process.env.NOTION_DATABASE_ID;
+function databaseId(scope) {
+  if (scope === "pessoal") {
+    const id = process.env.NOTION_DATABASE_ID_PESSOAL;
+    if (!id) throw new Error("NOTION_DATABASE_ID_PESSOAL não configurado");
+    return id;
+  }
+  // default: trabalho — aceita ambos os nomes para retrocompatibilidade
+  return process.env.NOTION_DATABASE_ID_TRABALHO || process.env.NOTION_DATABASE_ID;
 }
 
 // Build Notion property object from our flat task data

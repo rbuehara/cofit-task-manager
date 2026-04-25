@@ -1094,6 +1094,7 @@ function App() {
       return saved;
     } catch { return COLLAPSIBLE_COLS; }
   });
+  const [scope, setScope] = useState(() => localStorage.getItem("cofit-scope") || "trabalho");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [processing, setProcessing] = useState(null);
@@ -1120,7 +1121,12 @@ function App() {
     });
   }
 
-  useEffect(() => { fetchTasks(); }, []);
+  useEffect(() => { fetchTasks(); }, [scope]);
+
+  // Atualiza título da aba conforme scope
+  useEffect(() => {
+    document.title = scope === "pessoal" ? "COFIT — Pessoal" : "COFIT — Trabalho";
+  }, [scope]);
 
   // Cursor grabbing durante DnD
   useEffect(() => {
@@ -1170,12 +1176,19 @@ function App() {
     return { updatedTasks, changed };
   }
 
+  function switchScope(newScope) {
+    localStorage.setItem("cofit-scope", newScope);
+    setScope(newScope);
+    setTasks([]); // limpa board imediatamente antes de recarregar
+  }
+
   async function fetchTasks() {
     setLoading(true); setLoadError(null);
     try {
       // Wake-snooze é feito no backend (api/tasks.js GET) — single-writer,
       // sem race entre múltiplos clients/abas.
-      const data = await api("/api/tasks");
+      const currentScope = localStorage.getItem("cofit-scope") || "trabalho";
+      const data = await api(`/api/tasks?scope=${currentScope}`);
       setTasks(data.tasks || []);
     } catch (e) {
       if (!e.message.includes("expirada")) setLoadError(e.message);
@@ -1191,8 +1204,8 @@ function App() {
     setProcessing("new");
     try {
       let polished = null;
-      try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags } }); } catch {}
-      const taskData = { title: polished?.title || title, description: polished?.description || description, tags: polished?.tags || [], deadline, column: "Inbox", createdAt: new Date().toISOString() };
+      try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, scope } }); } catch {}
+      const taskData = { title: polished?.title || title, description: polished?.description || description, tags: polished?.tags || [], deadline, column: "Inbox", createdAt: new Date().toISOString(), scope };
       const data = await api("/api/tasks", { method: "POST", body: taskData });
       setTasks(prev => [...prev, data.task]);
       setNewCardId(data.task.id);
@@ -1322,7 +1335,7 @@ function App() {
     setProcessing(id); const task = tasks.find(t => t.id === id); if (!task) { setProcessing(null); return; }
     try {
       let polished = null;
-      try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags } }); } catch {}
+      try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, scope } }); } catch {}
       const changes = {
         title: polished?.title || title,
         description: polished?.description || description,
@@ -1339,7 +1352,7 @@ function App() {
   async function handleImprove(id) {
     setProcessing(id); const task = tasks.find(t => t.id === id); if (!task) { setProcessing(null); return; }
     try {
-      const polished = await api("/api/ai-polish", { method: "POST", body: { title: task.title, description: task.description, existingTags: allTags } });
+      const polished = await api("/api/ai-polish", { method: "POST", body: { title: task.title, description: task.description, existingTags: allTags, scope } });
       const changes = { title: polished.title || task.title, description: polished.description || task.description, tags: polished.tags || task.tags };
       await api(`/api/tasks/${id}`, { method: "PATCH", body: changes }); updateLocal(id, changes);
     } catch (e) { setBanner({ type: "error", msg: "Erro ao melhorar tarefa", detail: e.message }); }
@@ -1485,6 +1498,14 @@ function App() {
             <span style={{ opacity: 0.8, marginLeft: 5 }}>concluída{doneToday !== 1 ? "s" : ""} hoje</span>
           </span>
         </div>
+        {/* Toggle Trabalho / Pessoal */}
+        <div style={{ display: "flex", gap: 2, background: AU.surface, borderRadius: 8, padding: 3, border: `1px solid ${AU.hair}` }}>
+          {["trabalho", "pessoal"].map(s => (
+            <button key={s} onClick={() => switchScope(s)} style={{ padding: "4px 13px", borderRadius: 6, border: "none", background: scope === s ? (s === "pessoal" ? "#d97706" : "#4f46e5") : "transparent", color: scope === s ? "#fff" : AU.inkMid, fontWeight: 600, fontSize: 11.5, fontFamily: "inherit", cursor: "pointer", transition: "all 0.15s", letterSpacing: 0.2 }}>
+              {s === "trabalho" ? "🏢 Trabalho" : "🏠 Pessoal"}
+            </button>
+          ))}
+        </div>
         <SearchInput value={search} onChange={setSearch} count={searchResultCount} mobile={false} />
         <AddForm onAdd={handleAdd} busy={processing === "new"} />
         <div style={{ flex: 1 }} />
@@ -1502,6 +1523,14 @@ function App() {
       <header className="mobile-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderBottom: `1px solid ${AU.hair}`, flexDirection: "column" }}>
         <div style={{ display: "flex", width: "100%", alignItems: "center", gap: 10 }}>
           <span style={{ fontFamily: "Fraunces, serif", fontSize: 18, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
+          {/* Toggle mobile */}
+          <div style={{ display: "flex", gap: 1, background: AU.surface, borderRadius: 6, padding: 2, border: `1px solid ${AU.hair}` }}>
+            {["trabalho", "pessoal"].map(s => (
+              <button key={s} onClick={() => switchScope(s)} style={{ padding: "3px 8px", borderRadius: 5, border: "none", background: scope === s ? (s === "pessoal" ? "#d97706" : "#4f46e5") : "transparent", color: scope === s ? "#fff" : AU.inkMid, fontWeight: 600, fontSize: 10, fontFamily: "inherit", cursor: "pointer" }}>
+                {s === "trabalho" ? "💼" : "🏠"}
+              </button>
+            ))}
+          </div>
           <div style={{ flex: 1 }}>
             <select
               value={mobileCol}

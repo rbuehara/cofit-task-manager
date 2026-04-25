@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   try {
-    const { tasks, profile } = req.body;
+    const { tasks, profile, scope } = req.body; // scope aceito mas ignorado nesta fase
     if (!tasks?.length) return res.status(400).json({ error: "No tasks to prioritize" });
 
     const today = new Date().toISOString().split("T")[0];

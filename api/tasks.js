@@ -5,6 +5,9 @@ export default async function handler(req, res) {
   if (!requireAuth(req, res)) return;
   try {
     if (req.method === "GET") {
+      const scope = req.query.scope || "trabalho";
+      const dbId = databaseId(scope);
+
       // Fetch all tasks (paginated — Notion returns max 100 per call)
       const allPages = [];
       let cursor = undefined;
@@ -58,7 +61,7 @@ export default async function handler(req, res) {
         };
 
         const r = await fetch(
-          `https://api.notion.com/v1/databases/${databaseId()}/query`,
+          `https://api.notion.com/v1/databases/${dbId}/query`,
           { method: "POST", headers: notionHeaders(), body: JSON.stringify(body) }
         );
 
@@ -171,6 +174,9 @@ export default async function handler(req, res) {
       const task = req.body;
       if (!task.title) return res.status(400).json({ error: "title is required" });
 
+      const scope = task.scope || "trabalho";
+      const dbId = databaseId(scope);
+
       const props = buildProperties({
         ...task,
         column: task.column || "Inbox",
@@ -182,7 +188,7 @@ export default async function handler(req, res) {
         method: "POST",
         headers: notionHeaders(),
         body: JSON.stringify({
-          parent: { database_id: databaseId() },
+          parent: { database_id: dbId },
           properties: props,
         }),
       });

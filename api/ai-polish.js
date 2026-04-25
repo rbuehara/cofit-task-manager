@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   try {
-    const { title, description, existingTags } = req.body;
+    const { title, description, existingTags, scope } = req.body; // scope aceito mas ignorado nesta fase
     if (!title) return res.status(400).json({ error: "title is required" });
 
     const glossarioFmt = glossario.map((g) => `- ${g.sigla} = ${g.significado}`).join("\n");
