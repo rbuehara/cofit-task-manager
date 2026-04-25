@@ -307,9 +307,11 @@ function TagChip({ tag, small, onRemove }) {
 }
 
 /* NEW: editor de tags com autocomplete das existentes + criação de novas */
-function TagEditor({ tags, allTags, onChange }) {
+/* onAddToGlossary(tag): callback opcional — exibe microlink quando tag é removida */
+function TagEditor({ tags, allTags, onChange, onAddToGlossary }) {
   const [input, setInput] = useState("");
   const [showSug, setShowSug] = useState(false);
+  const [lastRemoved, setLastRemoved] = useState(null); // tag recém-removida para microlink
 
   const suggestions = allTags.filter(t => !tags.includes(t) && t.toLowerCase().includes(input.toLowerCase()));
 
@@ -320,12 +322,29 @@ function TagEditor({ tags, allTags, onChange }) {
     setShowSug(false);
   }
 
+  function removeTag(tag) {
+    onChange(tags.filter(x => x !== tag));
+    if (onAddToGlossary) setLastRemoved(tag);
+  }
+
   return (
     <div style={{ marginBottom: 5 }}>
       <span style={{ fontSize: 10, color: "#94a3b8", display: "block", marginBottom: 3 }}>Tags:</span>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 4 }}>
-        {tags.map(t => <TagChip key={t} tag={t} small onRemove={tag => onChange(tags.filter(x => x !== tag))} />)}
+        {tags.map(t => <TagChip key={t} tag={t} small onRemove={removeTag} />)}
       </div>
+      {/* Microlink: aparece após remover uma tag, se onAddToGlossary estiver definido */}
+      {lastRemoved && onAddToGlossary && (
+        <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 4 }}>
+          Tag "{lastRemoved}" removida.{" "}
+          <span
+            onClick={() => { onAddToGlossary(lastRemoved); setLastRemoved(null); }}
+            style={{ color: "#4f46e5", cursor: "pointer", textDecoration: "underline", fontWeight: 600 }}
+          >Adicionar ao glossário?</span>
+          {" "}
+          <span onClick={() => setLastRemoved(null)} style={{ color: "#94a3b8", cursor: "pointer" }}>✕</span>
+        </div>
+      )}
       <div style={{ position: "relative" }}>
         <input
           value={input}
@@ -355,6 +374,209 @@ function TagEditor({ tags, allTags, onChange }) {
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ── GlossaryModal ─────────────────────────────────────────────────────────── */
+/* CRUD do glossário. prefillSigla: abre com Sigla pré-preenchida (atalho inline). */
+function GlossaryModal({ scope, onClose, prefillSigla }) {
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterScope, setFilterScope] = useState("Todos");
+  const [editingId, setEditingId] = useState(null);  // id da entrada sendo editada, ou "new"
+  const [editSigla, setEditSigla] = useState("");
+  const [editSignif, setEditSignif] = useState("");
+  const [editEscopo, setEditEscopo] = useState(scope === "pessoal" ? "Pessoal" : "Trabalho");
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+  const significadoRef = useRef(null);
+
+  // Carrega todas as entradas (sem filtro de scope, para mostrar Todos no modal)
+  async function loadEntries() {
+    setLoading(true);
+    try {
+      const raw = await api("/api/glossary?scope=all");
+      setEntries(raw.entries || []);
+    } catch {
+      setEntries([]);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => { loadEntries(); }, []);
+
+  // Pré-preenche se veio do atalho inline
+  useEffect(() => {
+    if (prefillSigla) {
+      setEditingId("new");
+      setEditSigla(prefillSigla);
+      setEditSignif("");
+      setEditEscopo(scope === "pessoal" ? "Pessoal" : "Trabalho");
+      setTimeout(() => significadoRef.current?.focus(), 80);
+    }
+  }, [prefillSigla]);
+
+  function showToast(msg, type = "ok") {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 2500);
+  }
+
+  function startNew() {
+    setEditingId("new");
+    setEditSigla("");
+    setEditSignif("");
+    setEditEscopo(scope === "pessoal" ? "Pessoal" : "Trabalho");
+    setTimeout(() => significadoRef.current?.focus(), 80);
+  }
+
+  function startEdit(entry) {
+    setEditingId(entry.id);
+    setEditSigla(entry.sigla);
+    setEditSignif(entry.significado);
+    setEditEscopo(entry.escopo);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function saveEntry() {
+    if (!editSigla.trim() || !editSignif.trim()) return;
+    setSaving(true);
+    try {
+      if (editingId === "new") {
+        await api("/api/glossary", { method: "POST", body: { sigla: editSigla.trim(), significado: editSignif.trim(), escopo: editEscopo } });
+        showToast(`"${editSigla.trim()}" adicionado ao glossário.`);
+      } else {
+        await api(`/api/glossary/${editingId}`, { method: "PATCH", body: { sigla: editSigla.trim(), significado: editSignif.trim(), escopo: editEscopo } });
+        showToast(`"${editSigla.trim()}" atualizado.`);
+      }
+      setEditingId(null);
+      await loadEntries();
+    } catch (e) {
+      showToast("Erro ao salvar: " + e.message, "error");
+    }
+    setSaving(false);
+  }
+
+  async function deleteEntry(entry) {
+    if (!confirm(`Arquivar "${entry.sigla}"? Não aparecerá mais no glossário. Pode ser restaurada no Notion.`)) return;
+    try {
+      await api(`/api/glossary/${entry.id}`, { method: "DELETE" });
+      showToast(`"${entry.sigla}" arquivada.`);
+      await loadEntries();
+    } catch (e) {
+      showToast("Erro ao arquivar: " + e.message, "error");
+    }
+  }
+
+  const escopoOptions = ["Trabalho", "Pessoal", "Ambos"];
+  const filtered = filterScope === "Todos" ? entries : entries.filter(e => e.escopo === filterScope || e.escopo === "Ambos");
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, backdropFilter: "blur(5px)" }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: "#fff", borderRadius: 14, width: "min(680px, 95vw)", maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.22)", animation: "fadeIn 0.15s ease" }}>
+        {/* Cabeçalho */}
+        <div style={{ padding: "18px 20px 12px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 18 }}>📖</span>
+          <span style={{ fontWeight: 800, fontSize: 15, color: "#0f172a", letterSpacing: -0.3 }}>Glossário COFIT</span>
+          <div style={{ flex: 1 }} />
+          {/* Filtro de escopo */}
+          <div style={{ display: "flex", gap: 2, background: "#f1f5f9", borderRadius: 6, padding: 2 }}>
+            {["Todos", "Trabalho", "Pessoal"].map(s => (
+              <button key={s} onClick={() => setFilterScope(s)}
+                style={{ padding: "3px 10px", borderRadius: 5, border: "none", background: filterScope === s ? "#4f46e5" : "transparent", color: filterScope === s ? "#fff" : "#475569", fontSize: 11, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
+                {s}
+              </button>
+            ))}
+          </div>
+          <button onClick={onClose} style={{ border: "none", background: "transparent", color: "#94a3b8", fontSize: 20, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>×</button>
+        </div>
+
+        {/* Toast */}
+        {toast && (
+          <div style={{ margin: "8px 20px 0", padding: "7px 12px", borderRadius: 7, background: toast.type === "error" ? "#fee2e2" : "#dcfce7", color: toast.type === "error" ? "#991b1b" : "#166534", fontSize: 12, fontWeight: 600 }}>
+            {toast.msg}
+          </div>
+        )}
+
+        {/* Tabela */}
+        <div style={{ overflowY: "auto", flex: 1, padding: "12px 20px" }}>
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "30px 0", color: "#94a3b8", fontSize: 13 }}>Carregando...</div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
+                  <th style={{ textAlign: "left", padding: "6px 8px", color: "#475569", fontWeight: 700, width: 120 }}>Sigla</th>
+                  <th style={{ textAlign: "left", padding: "6px 8px", color: "#475569", fontWeight: 700 }}>Significado</th>
+                  <th style={{ textAlign: "left", padding: "6px 8px", color: "#475569", fontWeight: 700, width: 80 }}>Escopo</th>
+                  <th style={{ width: 64 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(entry => (
+                  editingId === entry.id ? (
+                    <tr key={entry.id} style={{ background: "#f8faff" }}>
+                      <td style={{ padding: "6px 8px" }}><input value={editSigla} onChange={e => setEditSigla(e.target.value)} style={{ ...inp, fontSize: 12 }} /></td>
+                      <td style={{ padding: "6px 8px" }}><input ref={significadoRef} value={editSignif} onChange={e => setEditSignif(e.target.value)} style={{ ...inp, fontSize: 12 }} onKeyDown={e => e.key === "Enter" && saveEntry()} /></td>
+                      <td style={{ padding: "6px 8px" }}>
+                        <select value={editEscopo} onChange={e => setEditEscopo(e.target.value)} style={{ ...inp, fontSize: 11, padding: "4px 5px" }}>
+                          {escopoOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </td>
+                      <td style={{ padding: "6px 4px", whiteSpace: "nowrap" }}>
+                        <button onClick={saveEntry} disabled={saving} style={{ ...btnP, padding: "3px 9px", fontSize: 11, marginRight: 3 }}>✓</button>
+                        <button onClick={cancelEdit} style={{ ...btnG, padding: "3px 7px", fontSize: 11 }}>✕</button>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={entry.id} style={{ borderBottom: "1px solid #f1f5f9" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#f8faff"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                      <td style={{ padding: "7px 8px", fontWeight: 700, color: "#0f172a" }}>{entry.sigla}</td>
+                      <td style={{ padding: "7px 8px", color: "#475569" }}>{entry.significado}</td>
+                      <td style={{ padding: "7px 8px" }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 999, background: entry.escopo === "Pessoal" ? "#dcfce7" : entry.escopo === "Ambos" ? "#ede9fe" : "#dbeafe", color: entry.escopo === "Pessoal" ? "#166534" : entry.escopo === "Ambos" ? "#5b21b6" : "#1e40af" }}>
+                          {entry.escopo}
+                        </span>
+                      </td>
+                      <td style={{ padding: "7px 4px", whiteSpace: "nowrap" }}>
+                        <button onClick={() => startEdit(entry)} title="Editar" style={{ ...btnS, marginRight: 3, padding: "2px 7px" }}>✎</button>
+                        <button onClick={() => deleteEntry(entry)} title="Arquivar" style={{ ...btnS, color: "#ef4444", padding: "2px 7px" }}>🗑</button>
+                      </td>
+                    </tr>
+                  )
+                ))}
+                {filtered.length === 0 && !loading && (
+                  <tr><td colSpan={4} style={{ padding: "20px 8px", textAlign: "center", color: "#94a3b8", fontSize: 12 }}>Nenhuma entrada para este filtro.</td></tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Linha de adição */}
+        <div style={{ padding: "12px 20px", borderTop: "1px solid #e2e8f0" }}>
+          {editingId === "new" ? (
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              <input value={editSigla} onChange={e => setEditSigla(e.target.value)} placeholder="Sigla" style={{ ...inp, width: 120, fontSize: 12 }} />
+              <input ref={significadoRef} value={editSignif} onChange={e => setEditSignif(e.target.value)} placeholder="Significado" style={{ ...inp, flex: 1, minWidth: 140, fontSize: 12 }} onKeyDown={e => e.key === "Enter" && saveEntry()} />
+              <select value={editEscopo} onChange={e => setEditEscopo(e.target.value)} style={{ ...inp, width: 100, fontSize: 11, padding: "5px 5px" }}>
+                {escopoOptions.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+              <button onClick={saveEntry} disabled={saving || !editSigla.trim() || !editSignif.trim()} style={{ ...btnP, padding: "6px 14px", fontSize: 12, opacity: (!editSigla.trim() || !editSignif.trim()) ? 0.4 : 1 }}>Salvar</button>
+              <button onClick={cancelEdit} style={{ ...btnG, padding: "6px 10px", fontSize: 12 }}>Cancelar</button>
+            </div>
+          ) : (
+            <button onClick={startNew} style={{ ...btnG, fontSize: 12, color: "#4f46e5", borderColor: "#4f46e5", display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ fontSize: 15, lineHeight: 1 }}>+</span> Nova entrada
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -456,7 +678,7 @@ function AddForm({ onAdd, busy, initialOpen = false }) {
 }
 
 /* CHANGED: TaskCard recebe allTags, gerencia eTags, inclui TagEditor no modo edição; 4.2 adiciona DnD */
-function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, isNew, reordering, onDragStart, onDragEnd, isDragging, isMobile }) {
+function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, isNew, reordering, onDragStart, onDragEnd, isDragging, isMobile, onAddToGlossary }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const suppressClickRef = useRef(false);
@@ -479,7 +701,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
       <input value={eT} onChange={e => setET(e.target.value)} style={{ ...inp, fontWeight: 600, fontSize: 12, marginBottom: 5 }} autoFocus />
       <textarea value={eD} onChange={e => setED(e.target.value)} rows={3} style={{ ...inp, fontSize: 11, resize: "vertical", marginBottom: 5 }} />
       {/* NEW: editor de tags inline */}
-      <TagEditor tags={eTags} allTags={allTags} onChange={setETags} />
+      <TagEditor tags={eTags} allTags={allTags} onChange={setETags} onAddToGlossary={onAddToGlossary} />
       <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 7 }}><span style={{ fontSize: 10, color: AU.inkLow }}>Prazo:</span><input type="date" value={eDl} onChange={e => setEDl(e.target.value)} style={{ ...inp, width: "auto", padding: "3px 5px", fontSize: 10 }} /></div>
       <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
         <button onClick={() => { setET(task.title); setED(task.description); setEDl(task.deadline || ""); setETags(task.tags || []); setEditing(false); }} style={{ ...btnS, background: "#f1f5f9" }}>Cancelar</button>
@@ -963,7 +1185,7 @@ function DropIndicator({ accent }) {
 }
 
 /* CHANGED: Column recebe e repassa allTags, newCardId; 4.2 adiciona DnD */
-function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, onCollapse, newCardId, reordering, dragging, onDropTargetChange, dropTarget, onDrop, isMobile, onDragStart, onDragEnd }) {
+function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, onCollapse, newCardId, reordering, dragging, onDropTargetChange, dropTarget, onDrop, isMobile, onDragStart, onDragEnd, onAddToGlossary }) {
   const [showAll, setShowAll] = useState(false);
   const containerRef = useRef(null);
   const isDone = name === "Concluído";
@@ -1059,6 +1281,7 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
                 onDragStart={onDragStart} onDragEnd={onDragEnd}
                 isDragging={dragging?.id === t.id}
                 isMobile={isMobile}
+                onAddToGlossary={onAddToGlossary}
               />
             </div>
           </React.Fragment>
@@ -1095,6 +1318,8 @@ function App() {
     } catch { return COLLAPSIBLE_COLS; }
   });
   const [scope, setScope] = useState(() => localStorage.getItem("cofit-scope") || "trabalho");
+  const [showGlossary, setShowGlossary] = useState(false);
+  const [glossaryPrefill, setGlossaryPrefill] = useState(null); // sigla pré-preenchida ao abrir do atalho inline
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [processing, setProcessing] = useState(null);
@@ -1455,8 +1680,22 @@ function App() {
   /* Colunas disponíveis no mobile: todas (incluindo as "recolhidas" no desktop, que no mobile entram no dropdown) */
   const mobileColName = COLUMNS[mobileCol] || COLUMNS[0];
 
+  function openGlossaryWithPrefill(sigla) {
+    setGlossaryPrefill(sigla || null);
+    setShowGlossary(true);
+  }
+
   return (
     <div>
+      {/* ── Modal Glossário ── */}
+      {showGlossary && (
+        <GlossaryModal
+          scope={scope}
+          prefillSigla={glossaryPrefill}
+          onClose={() => { setShowGlossary(false); setGlossaryPrefill(null); }}
+        />
+      )}
+
       {/* ── Modal Aguardando ── */}
       {aguardandoPending && (
         <AguardandoModal
@@ -1506,6 +1745,10 @@ function App() {
             </button>
           ))}
         </div>
+        {/* Botão Glossário */}
+        <button onClick={() => openGlossaryWithPrefill(null)} title="Glossário" style={{ padding: "5px 11px", borderRadius: 6, border: `1px solid ${AU.hair}`, background: "transparent", color: AU.inkMid, fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+          <span>📖</span><span style={{ fontWeight: 600 }}>Glossário</span>
+        </button>
         <SearchInput value={search} onChange={setSearch} count={searchResultCount} mobile={false} />
         <AddForm onAdd={handleAdd} busy={processing === "new"} />
         <div style={{ flex: 1 }} />
@@ -1549,6 +1792,7 @@ function App() {
             style={{ border: "none", background: search ? statusBg(COL_ACCENT["A fazer"]) : "transparent", color: search ? COL_ACCENT["A fazer"] : AU.inkMid, fontSize: 18, padding: "2px 6px", lineHeight: 1, cursor: "pointer", borderRadius: 6 }}
             title="Buscar"
           >🔍</button>
+          <button onClick={() => openGlossaryWithPrefill(null)} title="Glossário" style={{ border: "none", background: "transparent", color: AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>📖</button>
           <button onClick={fetchTasks} style={{ border: "none", background: "transparent", color: AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>🔄</button>
         </div>
         {showMobileSearch && (
@@ -1572,7 +1816,7 @@ function App() {
               const isCollapsible = COLLAPSIBLE_COLS.includes(col);
               // Durante busca: oculta colunas sem resultados (exceto Inbox e A fazer, sempre visíveis)
               if (searchDebounced && byCols[i].length === 0 && col !== "Inbox" && col !== "A fazer") return null;
-              return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} onReorder={handleReorder} processing={processing} allTags={allTags} onCollapse={searchDebounced ? null : (isCollapsible ? () => toggleCol(col) : null)} newCardId={newCardId} reordering={reorderingCol.has(col)} dragging={dragging} onDropTargetChange={setDropTarget} dropTarget={dropTarget} onDrop={handleDrop} onDragStart={handleDragStart} onDragEnd={handleDragEnd} isMobile={false} />;
+              return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} onReorder={handleReorder} processing={processing} allTags={allTags} onCollapse={searchDebounced ? null : (isCollapsible ? () => toggleCol(col) : null)} newCardId={newCardId} reordering={reorderingCol.has(col)} dragging={dragging} onDropTargetChange={setDropTarget} dropTarget={dropTarget} onDrop={handleDrop} onDragStart={handleDragStart} onDragEnd={handleDragEnd} isMobile={false} onAddToGlossary={openGlossaryWithPrefill} />;
             })}
           </div>
         )}
@@ -1602,6 +1846,7 @@ function App() {
           onDragStart={null}
           onDragEnd={null}
           isMobile={true}
+          onAddToGlossary={openGlossaryWithPrefill}
         />
       </div>
 

@@ -51,18 +51,18 @@ async function fetchFromNotion(scope) {
   const dbId = process.env.NOTION_DATABASE_ID_GLOSSARIO;
   if (!dbId) return null; // sem configuração → fallback
 
-  const escopoNotion = scope === "pessoal" ? "Pessoal" : "Trabalho";
+  // scope="all" → sem filtro, retorna tudo (para o modal de edição)
+  const body = { sorts: [{ property: "Sigla", direction: "ascending" }], page_size: 100 };
 
-  const body = {
-    filter: {
+  if (scope !== "all") {
+    const escopoNotion = scope === "pessoal" ? "Pessoal" : "Trabalho";
+    body.filter = {
       or: [
         { property: "Escopo", select: { equals: escopoNotion } },
         { property: "Escopo", select: { equals: "Ambos" } },
       ],
-    },
-    sorts: [{ property: "Sigla", direction: "ascending" }],
-    page_size: 100,
-  };
+    };
+  }
 
   const res = await fetch(
     `https://api.notion.com/v1/databases/${dbId}/query`,
@@ -84,7 +84,8 @@ async function fetchFromNotion(scope) {
     const p = page.properties || {};
     const sigla = p["Sigla"]?.title?.[0]?.plain_text || "";
     const significado = p["Significado"]?.rich_text?.[0]?.plain_text || "";
-    return { sigla, significado };
+    const escopo = p["Escopo"]?.select?.name || "Trabalho";
+    return { id: page.id, sigla, significado, escopo };
   });
 }
 
@@ -115,4 +116,22 @@ async function getGlossary(scope) {
   return result;
 }
 
-module.exports = { getGlossary };
+// Retorna todas as entradas (sem filtro de scope) com id — para o modal CRUD
+async function fetchAll() {
+  const entries = await fetchFromNotion("all");
+  if (entries === null) {
+    // fallback: retorna as hardcoded com id=null
+    return FALLBACK_GLOSSARIO.map(e => ({ ...e, id: null, escopo: "Trabalho" }));
+  }
+  return entries;
+}
+
+function invalidateCache(scope) {
+  if (scope) {
+    cache.delete(scope);
+  } else {
+    cache.clear(); // invalida tudo
+  }
+}
+
+module.exports = { getGlossary, fetchAll, invalidateCache };
