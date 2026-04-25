@@ -1,5 +1,5 @@
 const requireAuth = require("./_auth");
-const { contexto, glossario } = require("./glossary");
+const { getGlossary } = require("./_glossary");
 
 export default async function handler(req, res) {
   if (!requireAuth(req, res)) return;
@@ -9,8 +9,11 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   try {
-    const { title, description, existingTags, scope } = req.body; // scope aceito mas ignorado nesta fase
+    const { title, description, existingTags, scope } = req.body;
     if (!title) return res.status(400).json({ error: "title is required" });
+
+    // Carrega contexto e glossário do scope correto (com cache de 5 min)
+    const { contexto, glossario } = await getGlossary(scope);
 
     const glossarioFmt = glossario.map((g) => `- ${g.sigla} = ${g.significado}`).join("\n");
 
@@ -22,7 +25,7 @@ export default async function handler(req, res) {
 Contexto do usuário: ${contexto}
 
 Glossário de siglas do usuário (use para ENTENDER o que o usuário escreveu; NÃO altere, NÃO expanda, NÃO "corrija" essas siglas no título ou descrição — mantenha-as exatamente como estão, a menos que o texto original já use a forma expandida):
-${glossarioFmt}
+${glossarioFmt || "(sem glossário para este scope)"}
 
 Tags existentes: ${(existingTags || []).join(", ") || "nenhuma"}. Prefira existentes.
 Responda APENAS JSON: {"title":"...","description":"...","tags":["tag1"]}`;

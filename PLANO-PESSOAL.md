@@ -92,7 +92,7 @@
 **Validação manual ao final:**
 - `GET /api/glossary?scope=trabalho` retorna as 13 entradas originais.
 - `GET /api/glossary?scope=pessoal` retorna vazio (ou entradas com Escopo=Ambos, se houver).
-- Adicionar manualmente no Notion uma entrada com Escopo=Pessoal (ex.: "Lú" / "esposa" / Pessoal). Esperar 5 min OU reiniciar o dev server, confirmar que aparece em `?scope=pessoal`.
+- Adicionar manualmente no Notion uma entrada com Escopo=Pessoal (ex.: "Isa" / "esposa" / Pessoal). Esperar 5 min OU reiniciar o dev server, confirmar que aparece em `?scope=pessoal`.
 - `ai-polish` continua funcionando em Trabalho com o mesmo comportamento de antes.
 - `ai-polish` em Pessoal não usa mais o glossário corporativo (validar criando task "comprar gramix" — não deve ganhar tag de trabalho nem contexto SEFAZ no polish).
 
