@@ -1336,6 +1336,7 @@ function App() {
   const prevCollapsedRef = useRef(null); // snapshot de collapsedCols antes da busca
   const [dragging, setDragging] = useState(null); // { id, sourceCol }
   const [dropTarget, setDropTarget] = useState(null); // { col, index }
+  const [recentCompleted, setRecentCompleted] = useState([]); // cache local das concluídas recentes (Fase 4)
   const allTags = [...new Set(tasks.flatMap(t => t.tags || []))];
 
   function toggleCol(name) {
@@ -1346,7 +1347,7 @@ function App() {
     });
   }
 
-  useEffect(() => { fetchTasks(); }, [scope]);
+  useEffect(() => { fetchTasks(); fetchRecentCompleted(); }, [scope]);
 
   // Atualiza título da aba conforme scope
   useEffect(() => {
@@ -1421,6 +1422,34 @@ function App() {
     setLoading(false);
   }
 
+  // Busca tasks concluídas nos últimos 30 dias para enriquecer o contexto do ai-polish (Fase 4)
+  async function fetchRecentCompleted() {
+    const currentScope = localStorage.getItem("cofit-scope") || "trabalho";
+    try {
+      const data = await api(`/api/tasks/recent-completed?scope=${currentScope}&days=30`);
+      setRecentCompleted(data.tasks || []);
+    } catch {
+      setRecentCompleted([]); // falha silenciosa — não é crítico
+    }
+  }
+
+  // Calcula activeTasksByTag: { tag: [títulos das 5 ativas mais recentes] } (Fase 4)
+  function buildActiveTasksByTag(currentTasks) {
+    const active = currentTasks.filter(t => t.column !== "Concluído" && t.column !== "Snooze");
+    const byTag = {};
+    for (const task of active) {
+      for (const tag of (task.tags || [])) {
+        if (!byTag[tag]) byTag[tag] = [];
+        byTag[tag].push(task.title);
+      }
+    }
+    // Limita a 5 títulos por tag
+    for (const tag of Object.keys(byTag)) {
+      byTag[tag] = byTag[tag].slice(0, 5);
+    }
+    return byTag;
+  }
+
   function updateLocal(id, changes) {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...changes } : t));
   }
@@ -1429,7 +1458,13 @@ function App() {
     setProcessing("new");
     try {
       let polished = null;
-      try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, scope } }); } catch {}
+      try {
+        polished = await api("/api/ai-polish", { method: "POST", body: {
+          title, description, existingTags: allTags, scope,
+          activeTasksByTag: buildActiveTasksByTag(tasks),
+          recentCompleted: recentCompleted.slice(0, 20),
+        }});
+      } catch {}
       const taskData = { title: polished?.title || title, description: polished?.description || description, tags: polished?.tags || [], deadline, column: "Inbox", createdAt: new Date().toISOString(), scope };
       const data = await api("/api/tasks", { method: "POST", body: taskData });
       setTasks(prev => [...prev, data.task]);
@@ -1560,7 +1595,13 @@ function App() {
     setProcessing(id); const task = tasks.find(t => t.id === id); if (!task) { setProcessing(null); return; }
     try {
       let polished = null;
-      try { polished = await api("/api/ai-polish", { method: "POST", body: { title, description, existingTags: allTags, scope } }); } catch {}
+      try {
+        polished = await api("/api/ai-polish", { method: "POST", body: {
+          title, description, existingTags: allTags, scope,
+          activeTasksByTag: buildActiveTasksByTag(tasks),
+          recentCompleted: recentCompleted.slice(0, 20),
+        }});
+      } catch {}
       const changes = {
         title: polished?.title || title,
         description: polished?.description || description,
@@ -1577,7 +1618,11 @@ function App() {
   async function handleImprove(id) {
     setProcessing(id); const task = tasks.find(t => t.id === id); if (!task) { setProcessing(null); return; }
     try {
-      const polished = await api("/api/ai-polish", { method: "POST", body: { title: task.title, description: task.description, existingTags: allTags, scope } });
+      const polished = await api("/api/ai-polish", { method: "POST", body: {
+        title: task.title, description: task.description, existingTags: allTags, scope,
+        activeTasksByTag: buildActiveTasksByTag(tasks),
+        recentCompleted: recentCompleted.slice(0, 20),
+      }});
       const changes = { title: polished.title || task.title, description: polished.description || task.description, tags: polished.tags || task.tags };
       await api(`/api/tasks/${id}`, { method: "PATCH", body: changes }); updateLocal(id, changes);
     } catch (e) { setBanner({ type: "error", msg: "Erro ao melhorar tarefa", detail: e.message }); }

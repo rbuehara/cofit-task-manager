@@ -9,13 +9,42 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   try {
-    const { title, description, existingTags, scope } = req.body;
+    const { title, description, existingTags, scope, activeTasksByTag, recentCompleted } = req.body;
     if (!title) return res.status(400).json({ error: "title is required" });
 
     // Carrega contexto e glossário do scope correto (com cache de 5 min)
     const { contexto, glossario } = await getGlossary(scope);
 
     const glossarioFmt = glossario.map((g) => `- ${g.sigla} = ${g.significado}`).join("\n");
+
+    // Seções contextuais condicionais (projetos ativos + concluídas recentes)
+    let activeSection = "";
+    if (activeTasksByTag && typeof activeTasksByTag === "object") {
+      const entries = Object.entries(activeTasksByTag).filter(([, titles]) => titles.length > 0);
+      if (entries.length > 0) {
+        activeSection = "\n\nProjetos ativos (tags com tasks em aberto):\n" +
+          entries.map(([tag, titles]) => `- ${tag}: ${titles.join("; ")}`).join("\n");
+      }
+    }
+
+    let recentSection = "";
+    if (Array.isArray(recentCompleted) && recentCompleted.length > 0) {
+      recentSection = "\n\nConcluídas recentemente (contexto de projetos em andamento):\n" +
+        recentCompleted
+          .slice(0, 20)
+          .map(t => `- ${t.title}${t.tags?.length ? ` [${t.tags.join(", ")}]` : ""}${t.completedAt ? ` (${t.completedAt.split("T")[0]})` : ""}`)
+          .join("\n");
+    }
+
+    // Instruções adaptadas por scope
+    const isPessoal = scope === "pessoal";
+    const scopeInstructions = isPessoal
+      ? `\n\nRegras para scope pessoal:
+- Use polishStrength: light — só reescreva título/descrição se houver ganho claro de clareza. Caso contrário, mantenha o original.
+- NÃO force linguagem profissional. Mantenha tom direto e informal.
+- Se a task parece continuação de um projeto ativo listado acima, sugira a MESMA tag do projeto.`
+      : `\n\nRegras para scope trabalho:
+- Se a task parece continuação de um projeto ativo listado acima, sugira a MESMA tag do projeto.`;
 
     const system = `Você é assistente de produtividade. Tarefas:
 1. Reescrever título (máx 80 chars, claro e conciso).
@@ -27,7 +56,7 @@ Contexto do usuário: ${contexto}
 Glossário de siglas do usuário (use para ENTENDER o que o usuário escreveu; NÃO altere, NÃO expanda, NÃO "corrija" essas siglas no título ou descrição — mantenha-as exatamente como estão, a menos que o texto original já use a forma expandida):
 ${glossarioFmt || "(sem glossário para este scope)"}
 
-Tags existentes: ${(existingTags || []).join(", ") || "nenhuma"}. Prefira existentes.
+Tags existentes: ${(existingTags || []).join(", ") || "nenhuma"}. Prefira existentes.${activeSection}${recentSection}${scopeInstructions}
 Responda APENAS JSON: {"title":"...","description":"...","tags":["tag1"]}`;
 
     const r = await fetch("https://api.anthropic.com/v1/messages", {
