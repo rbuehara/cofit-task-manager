@@ -504,29 +504,32 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
   return (
     <div
       className="card-wrap"
-      draggable={canDrag}
-      onDragStart={canDrag ? (e) => {
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", task.id);
-        onDragStart && onDragStart(task.id, task.column);
-      } : undefined}
-      onDragEnd={canDrag ? () => {
-        onDragEnd && onDragEnd();
-        // Suprime o próximo click por 100ms para não abrir/fechar o card após drag
-        suppressClickRef.current = true;
-        setTimeout(() => { suppressClickRef.current = false; }, 100);
-      } : undefined}
       style={{
         ...cardBase(accent, open), ...newStyle,
         opacity: isDragging ? 0.35 : isProc ? 0.5 : isDone ? 0.72 : 1,
         position: "relative", marginBottom: 12, transition: "opacity 0.15s",
-        cursor: canDrag ? "grab" : "default",
+        cursor: "default",
       }}
     >
       {isProc && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(12,18,36,0.72)", borderRadius: 10, zIndex: 2 }}><span style={{ fontSize: 11, color: AU.ink, fontWeight: 600 }}>Processando...</span></div>}
 
-      {/* Top strip Aurora: dot + barra até a borda direita do conteúdo + badges */}
-      <div onClick={() => { if (!suppressClickRef.current) setOpen(!open); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px 0", cursor: "pointer" }}>
+      {/* Top strip Aurora: dot + barra até a borda direita do conteúdo + badges — ALÇA DE ARRASTO */}
+      <div
+        draggable={canDrag}
+        onDragStart={canDrag ? (e) => {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", task.id);
+          onDragStart && onDragStart(task.id, task.column);
+        } : undefined}
+        onDragEnd={canDrag ? () => {
+          onDragEnd && onDragEnd();
+          // Suprime o próximo click por 100ms para não abrir/fechar o card após drag
+          suppressClickRef.current = true;
+          setTimeout(() => { suppressClickRef.current = false; }, 100);
+        } : undefined}
+        onClick={() => { if (!suppressClickRef.current) setOpen(!open); }}
+        style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px 0", cursor: canDrag ? "grab" : "pointer" }}
+      >
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: stripColor, boxShadow: `0 0 0 3px ${stripColor}22`, flexShrink: 0 }} />
         <div style={{ flex: 1, height: 2.5, borderRadius: 2, background: stripColor, opacity: 0.9 }} />
         {isNew && (
