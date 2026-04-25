@@ -71,6 +71,9 @@ function buildProperties(task) {
   if (task.snoozeUntil !== undefined) {
     props["Snooze até"] = task.snoozeUntil ? { date: { start: task.snoozeUntil } } : { date: null };
   }
+  if (task.lastMovedAt !== undefined) {
+    props["Última movimentação"] = task.lastMovedAt ? { date: { start: task.lastMovedAt } } : { date: null };
+  }
 
   return props;
 }
@@ -104,6 +107,7 @@ function parsePage(page) {
     completedAt: getDate(p["Concluído em"]),
     aguardando: getText(p["Aguardando"]),
     snoozeUntil: getDate(p["Snooze até"]),
+    lastMovedAt: getDate(p["Última movimentação"]),
   };
 }
 

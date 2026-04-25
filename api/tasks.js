@@ -177,11 +177,13 @@ export default async function handler(req, res) {
       const scope = task.scope || "trabalho";
       const dbId = databaseId(scope);
 
+      const now = new Date().toISOString();
       const props = buildProperties({
         ...task,
         column: task.column || "Inbox",
-        createdAt: task.createdAt || new Date().toISOString(),
+        createdAt: task.createdAt || now,
         appId: task.appId || crypto.randomUUID(),
+        lastMovedAt: task.lastMovedAt || now,
       });
 
       const r = await fetch("https://api.notion.com/v1/pages", {

@@ -259,6 +259,30 @@ const staleDays = (createdAt) => {
 };
 const calcDuration = (s, e) => { if (!s || !e) return null; const ms = new Date(e) - new Date(s); if (ms < 0) return null; const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000); return h > 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${h}h ${m}min`; };
 
+/* ── Aging visual (Fase 5) ── */
+// Retorna { days, level } onde level: 0=sem badge, 1=cinza (8-14d), 2=laranja (15-30d), 3=vermelho (31+d)
+// Exclui: Concluído, Snooze, tags com "compras", deadline futura dentro de 14 dias
+const AGING_SILENT_TAGS = ["compras"];
+function agingInfo(task) {
+  if (!task.lastMovedAt) return { days: 0, level: 0 };
+  if (task.column === "Concluído" || task.column === "Snooze") return { days: 0, level: 0 };
+  // Exclui se tem tag silenciosa de aging
+  if ((task.tags || []).some(t => AGING_SILENT_TAGS.includes(t.toLowerCase()))) return { days: 0, level: 0 };
+  // Exclui se tem deadline futura próxima (nos próximos 14 dias)
+  if (task.deadline) {
+    const dl = new Date(task.deadline);
+    const now = new Date();
+    const daysUntilDeadline = (dl - now) / 86_400_000;
+    if (daysUntilDeadline >= 0 && daysUntilDeadline <= 14) return { days: 0, level: 0 };
+  }
+  const days = Math.floor((Date.now() - new Date(task.lastMovedAt).getTime()) / 86_400_000);
+  let level = 0;
+  if (days >= 31) level = 3;
+  else if (days >= 15) level = 2;
+  else if (days >= 8) level = 1;
+  return { days, level };
+}
+
 /* ── API ── */
 async function api(path, opts = {}) {
   const r = await fetch(path, {
@@ -720,6 +744,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
   const overdueDays = overdue ? Math.max(1, Math.floor((Date.now() - new Date(task.deadline).getTime()) / 86_400_000)) : 0;
   const isSnoozeCol = task.column === "Snooze";
   const isAguardCol = task.column === "Aguardando";
+  const aging = agingInfo(task);
 
   const canDrag = !editing && !isProc && !isNew && !isMobile;
 
@@ -743,6 +768,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         opacity: isDragging ? 0.35 : isProc ? 0.5 : isDone ? 0.72 : 1,
         position: "relative", marginBottom: 12, transition: "opacity 0.15s",
         cursor: canDrag ? "grab" : "default",
+        ...(aging.level === 3 ? { borderLeft: "3px solid #f87171" } : {}),
       }}
     >
       {isProc && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(12,18,36,0.72)", borderRadius: 10, zIndex: 2 }}><span style={{ fontSize: 11, color: AU.ink, fontWeight: 600 }}>Processando...</span></div>}
@@ -776,6 +802,20 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
               color: INBOX_STALE_COLOR, border: `1px solid ${INBOX_STALE_COLOR}66`,
               padding: "1px 7px", borderRadius: 999,
             }}>{staleDays(task.createdAt)}d no Inbox</span>
+        )}
+        {!isNew && aging.level >= 1 && (
+          <span
+            title={`Sem movimentação há ${aging.days} dias`}
+            style={{
+              display: "inline-flex", alignItems: "center", whiteSpace: "nowrap",
+              fontSize: 10, fontWeight: 500, letterSpacing: 0.3,
+              padding: "1px 7px", borderRadius: 999,
+              ...(aging.level === 1
+                ? { color: "#94a3b8", border: "1px solid #94a3b844" }               // cinza (8-14d)
+                : aging.level === 2
+                ? { color: "#f59e0b", border: "1px solid #f59e0b66" }               // âmbar (15-30d)
+                : { color: "#f87171", border: "1px solid #f8717166" }),             // vermelho (31+d)
+            }}>📅 {aging.days}d</span>
         )}
       </div>
 

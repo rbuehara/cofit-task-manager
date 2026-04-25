@@ -8,7 +8,13 @@ export default async function handler(req, res) {
     if (!id) return res.status(400).json({ error: "Missing page id" });
 
     if (req.method === "PATCH") {
-      const props = buildProperties(req.body);
+      const body = req.body;
+      // Se o PATCH altera a coluna (mudança de status), seta lastMovedAt automaticamente.
+      // Reordenações dentro da mesma coluna enviam apenas { ordem } — sem "column" — e NÃO devem tocar lastMovedAt.
+      if (body.column !== undefined && body.lastMovedAt === undefined) {
+        body.lastMovedAt = new Date().toISOString();
+      }
+      const props = buildProperties(body);
 
       const r = await fetch(`https://api.notion.com/v1/pages/${id}`, {
         method: "PATCH",
