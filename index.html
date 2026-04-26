@@ -207,7 +207,7 @@ const statusBgStrong = (hex) => `color-mix(in oklch, ${hex} 28%, transparent)`;
 /* Fundo da página por scope — Opção A: Azul-aço + Âmbar queimado */
 const SCOPE_BG = {
   trabalho: "#0F1B2D",  // azul profundo, frio
-  pessoal:  "#1F1814",  // marrom-carvão, quente
+  pessoal:  "#241812",  // marrom-carvão, quente — luminância acima do azul, hue claramente quente
 };
 /* Barra superior do header por scope — 4px sólida */
 const SCOPE_BAR = {
@@ -2145,7 +2145,7 @@ function App() {
             <strong style={{ fontWeight: 700 }}>{activeN}</strong>
             <span style={{ opacity: 0.8, marginLeft: 5 }}>ativa{activeN !== 1 ? "s" : ""}</span>
           </span>
-          <span style={{ color: SCOPE_ACCENT[scope] }}>
+          <span style={{ color: COL_ACCENT["Em andamento"] }}>
             <strong style={{ fontWeight: 700 }}>{doingN}</strong>
             <span style={{ opacity: 0.8, marginLeft: 5 }}>em andamento</span>
           </span>
