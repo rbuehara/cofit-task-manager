@@ -219,6 +219,23 @@ const SCOPE_ACCENT = {
   trabalho: "#4A9EFF",  // azul claro
   pessoal:  "#E8A87C",  // âmbar suave
 };
+/* Superfícies por scope — header, card e card expandido.
+   Trabalho: família azul-aço fria (atual).
+   Pessoal: família marrom-quente, mesma luminância relativa do azul. */
+const SCOPE_THEME = {
+  trabalho: {
+    headerBg:    "#0f1730",  // = AU.surfaceAlt
+    cardBg:      "#1a2240",  // = AU.surface
+    cardBgHi:    "#222b4d",  // = AU.surfaceHi
+    hair:        "#2a3352",  // = AU.hair
+  },
+  pessoal: {
+    headerBg:    "#1A130E",  // marrom-carvão escuro
+    cardBg:      "#2A1F18",  // marrom médio
+    cardBgHi:    "#352720",  // marrom médio claro (expandido)
+    hair:        "#3D2D24",  // hairline marrom
+  },
+};
 /* Aurora surface tokens (espelham as CSS vars p/ uso em styles inline) */
 const AU = {
   bg: "#0c1224",
@@ -345,14 +362,18 @@ const btnP = { padding: "7px 16px", borderRadius: 6, border: "none", background:
 const btnG = { padding: "7px 12px", borderRadius: 6, border: "1.5px solid #e2e8f0", background: "transparent", color: "#64748b", fontWeight: 500, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" };
 const btnS = { padding: "3px 8px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 10.5, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 };
 /* Aurora card: surface dark; o acento da coluna aparece na top strip (não mais no border-left).
-   overflow:visible — overflow:hidden cortava tags/footnote em cards estreitos. */
-const cardBase = (accent, expanded) => ({
-  background: expanded ? AU.surfaceHi : AU.surface,
-  borderRadius: 10,
-  boxShadow: expanded
-    ? `0 16px 48px rgba(0,0,0,.5), 0 0 0 1px ${AU.hair}`
-    : "0 2px 0 rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.03)",
-});
+   overflow:visible — overflow:hidden cortava tags/footnote em cards estreitos.
+   scope: define a família de cor da superfície (azul/marrom). Default = trabalho. */
+const cardBase = (accent, expanded, scope = "trabalho") => {
+  const t = SCOPE_THEME[scope] || SCOPE_THEME.trabalho;
+  return {
+    background: expanded ? t.cardBgHi : t.cardBg,
+    borderRadius: 10,
+    boxShadow: expanded
+      ? `0 16px 48px rgba(0,0,0,.5), 0 0 0 1px ${t.hair}`
+      : "0 2px 0 rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.03)",
+  };
+};
 
 /* ── Components ── */
 
@@ -969,7 +990,7 @@ function StatusPill({ status, onClick, onMouseDown }) {
 }
 
 /* CHANGED: TaskCard recebe allTags, gerencia eTags, inclui TagEditor no modo edição; 4.2 adiciona DnD */
-function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, isNew, reordering, onDragStart, onDragEnd, isDragging, isMobile, onAddToGlossary }) {
+function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, isNew, reordering, onDragStart, onDragEnd, isDragging, isMobile, onAddToGlossary, scope }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const suppressClickRef = useRef(false);
@@ -988,7 +1009,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
   const save = () => { if (!eT.trim()) return; onEdit(task.id, { title: eT.trim(), description: eD.trim(), deadline: eDl || null, tags: eTags }); setEditing(false); };
 
   if (editing) return (
-    <div style={{ ...cardBase(COL_ACCENT[task.column], true), overflow: "visible", padding: 12, marginBottom: 12 }}>
+    <div style={{ ...cardBase(COL_ACCENT[task.column], true, scope), overflow: "visible", padding: 12, marginBottom: 12 }}>
       <input value={eT} onChange={e => setET(e.target.value)} style={{ ...inp, fontWeight: 600, fontSize: 12, marginBottom: 5 }} autoFocus />
       <textarea value={eD} onChange={e => setED(e.target.value)} rows={3} style={{ ...inp, fontSize: 11, resize: "vertical", marginBottom: 5 }} />
       {/* NEW: editor de tags inline */}
@@ -1031,7 +1052,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         setTimeout(() => { suppressClickRef.current = false; }, 100);
       } : undefined}
       style={{
-        ...cardBase(accent, open), ...newStyle,
+        ...cardBase(accent, open, scope), ...newStyle,
         opacity: isDragging ? 0.35 : isProc ? 0.5 : isDone ? 0.72 : 1,
         position: "relative", marginBottom: 12, transition: "opacity 0.15s",
         cursor: canDrag ? "grab" : "default",
@@ -1480,7 +1501,7 @@ function DropIndicator({ accent }) {
 }
 
 /* CHANGED: Column recebe e repassa allTags, newCardId; 4.2 adiciona DnD */
-function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, onCollapse, newCardId, reordering, dragging, onDropTargetChange, dropTarget, onDrop, isMobile, onDragStart, onDragEnd, onAddToGlossary }) {
+function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, onCollapse, newCardId, reordering, dragging, onDropTargetChange, dropTarget, onDrop, isMobile, onDragStart, onDragEnd, onAddToGlossary, scope }) {
   const [showAll, setShowAll] = useState(false);
   const containerRef = useRef(null);
   const isDone = name === "Concluído";
@@ -1577,6 +1598,7 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
                 isDragging={dragging?.id === t.id}
                 isMobile={isMobile}
                 onAddToGlossary={onAddToGlossary}
+                scope={scope}
               />
             </div>
           </React.Fragment>
@@ -2136,7 +2158,7 @@ function App() {
       )}
 
       {/* ── Header desktop ── */}
-      <header className="desktop-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "12px 22px", alignItems: "center", gap: 18, flexWrap: "wrap", borderTop: `4px solid ${SCOPE_BAR[scope]}`, borderBottom: `1px solid ${AU.hair}` }}>
+      <header className="desktop-only" style={{ background: SCOPE_THEME[scope].headerBg, color: AU.ink, padding: "12px 22px", alignItems: "center", gap: 18, flexWrap: "wrap", borderTop: `4px solid ${SCOPE_BAR[scope]}`, borderBottom: `1px solid ${SCOPE_THEME[scope].hair}` }}>
         <span style={{ fontFamily: "Fraunces, serif", fontSize: 20, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
         <span style={{ fontFamily: "Fraunces, serif", fontSize: 12.5, color: AU.inkMid, fontStyle: "italic", letterSpacing: 0.1 }}>Task Manager</span>
         <div style={{ height: 14, width: 1, background: AU.hair }} />
@@ -2210,7 +2232,7 @@ function App() {
       </header>
 
       {/* ── Header mobile ── */}
-      <header className="mobile-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderTop: `4px solid ${SCOPE_BAR[scope]}`, borderBottom: `1px solid ${AU.hair}`, flexDirection: "column" }}>
+      <header className="mobile-only" style={{ background: SCOPE_THEME[scope].headerBg, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderTop: `4px solid ${SCOPE_BAR[scope]}`, borderBottom: `1px solid ${SCOPE_THEME[scope].hair}`, flexDirection: "column" }}>
         <div style={{ display: "flex", width: "100%", alignItems: "center", gap: 10 }}>
           <span style={{ fontFamily: "Fraunces, serif", fontSize: 18, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
           {/* Toggle mobile — segmented control neutro */}
@@ -2282,7 +2304,7 @@ function App() {
               const isCollapsible = COLLAPSIBLE_COLS.includes(col);
               // Durante busca: oculta colunas sem resultados (exceto Inbox e A fazer, sempre visíveis)
               if (searchDebounced && byCols[i].length === 0 && col !== "Inbox" && col !== "A fazer") return null;
-              return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} onReorder={handleReorder} processing={processing} allTags={allTags} onCollapse={searchDebounced ? null : (isCollapsible ? () => toggleCol(col) : null)} newCardId={newCardId} reordering={reorderingCol.has(col)} dragging={dragging} onDropTargetChange={setDropTarget} dropTarget={dropTarget} onDrop={handleDrop} onDragStart={handleDragStart} onDragEnd={handleDragEnd} isMobile={false} onAddToGlossary={openGlossaryWithPrefill} />;
+              return <Column key={col} name={col} tasks={byCols[i]} colIndex={i} onMove={handleMove} onEdit={handleEdit} onDelete={handleDelete} onImprove={handleImprove} onReorder={handleReorder} processing={processing} allTags={allTags} onCollapse={searchDebounced ? null : (isCollapsible ? () => toggleCol(col) : null)} newCardId={newCardId} reordering={reorderingCol.has(col)} dragging={dragging} onDropTargetChange={setDropTarget} dropTarget={dropTarget} onDrop={handleDrop} onDragStart={handleDragStart} onDragEnd={handleDragEnd} isMobile={false} onAddToGlossary={openGlossaryWithPrefill} scope={scope} />;
             })}
           </div>
         )}
@@ -2313,6 +2335,7 @@ function App() {
           onDragEnd={null}
           isMobile={true}
           onAddToGlossary={openGlossaryWithPrefill}
+          scope={scope}
         />
       </div>
 
