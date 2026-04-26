@@ -45,6 +45,12 @@ input:focus, textarea:focus, select:focus { border-color: #4f46e5 !important; ou
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 .card-wrap:hover .hover-actions { display: flex !important; }
+.status-pill:hover {
+  background: var(--pill-acc) !important;
+  color: #0F0F0F !important;
+  border-color: var(--pill-acc) !important;
+  filter: none;
+}
 
 /* ── Mobile layout ── */
 .desktop-only { display: flex; }
@@ -198,6 +204,11 @@ const COL_ACCENT = {
 /* helpers de pill bg (alpha sobre transparente, p/ usar em fundo dark) */
 const statusBg       = (hex) => `color-mix(in oklch, ${hex} 18%, transparent)`;
 const statusBgStrong = (hex) => `color-mix(in oklch, ${hex} 28%, transparent)`;
+/* Fundo da página por scope — diferença clara mas não berrante */
+const SCOPE_BG = {
+  trabalho: "#0c1224",  // azul-quase-preto padrão
+  pessoal:  "#1a1410",  // marrom-quase-preto, mesma luminância
+};
 /* Aurora surface tokens (espelham as CSS vars p/ uso em styles inline) */
 const AU = {
   bg: "#0c1224",
@@ -919,6 +930,34 @@ function AddForm({ onAdd, busy, initialOpen = false }) {
   );
 }
 
+/* StatusPill — pill reutilizável para "mover para" (Redesign v2) */
+function StatusPill({ status, onClick, onMouseDown }) {
+  const acc = COL_ACCENT[status];
+  return (
+    <button
+      onClick={onClick}
+      onMouseDown={onMouseDown}
+      className="status-pill"
+      style={{
+        "--pill-acc": acc,
+        border: `1px solid ${acc}55`,
+        background: `${acc}1F`,
+        color: acc,
+        fontSize: 11,
+        fontWeight: 500,
+        padding: "3px 10px",
+        borderRadius: 999,
+        cursor: "pointer",
+        fontFamily: "inherit",
+        whiteSpace: "nowrap",
+        transition: "background 0.12s, color 0.12s, border-color 0.12s",
+      }}
+    >
+      {status}
+    </button>
+  );
+}
+
 /* CHANGED: TaskCard recebe allTags, gerencia eTags, inclui TagEditor no modo edição; 4.2 adiciona DnD */
 function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReorder, processing, allTags, isNew, reordering, onDragStart, onDragEnd, isDragging, isMobile, onAddToGlossary }) {
   const [open, setOpen] = useState(false);
@@ -1090,17 +1129,13 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
       {/* Botões de destino — card novo: pills Aurora (só quando colapsado; quando aberto, o bloco "mover para" já cobre) */}
       {isNew && !open && (
         <div style={{ display: "flex", gap: 5, flexWrap: "wrap", padding: "0 16px 14px", alignItems: "center" }}>
-          {COLUMNS.filter(c => c !== task.column).map(c => {
-            const acc = COL_ACCENT[c];
-            return (
-              <button key={c} onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
-                style={{
-                  border: "none", background: statusBg(acc), color: acc,
-                  fontSize: 11, fontWeight: 600, padding: "4px 11px", borderRadius: 999,
-                  cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-                }}>{c}</button>
-            );
-          })}
+          {COLUMNS.filter(c => c !== task.column).map(c => (
+            <StatusPill
+              key={c}
+              status={c}
+              onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
+            />
+          ))}
           <div style={{ flex: 1, minWidth: 4 }} />
           <button onClick={e => { e.stopPropagation(); setEditing(true); }}
             title="Editar"
@@ -1208,17 +1243,13 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
               fontFamily: '"JetBrains Mono", ui-monospace, monospace',
             }}>mover para</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-              {COLUMNS.filter(c => c !== task.column).map(c => {
-                const acc = COL_ACCENT[c];
-                return (
-                  <button key={c} onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
-                    style={{
-                      border: "none", background: statusBg(acc), color: acc,
-                      fontSize: 11, fontWeight: 600, padding: "4px 11px", borderRadius: 999,
-                      cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-                    }}>{c}</button>
-                );
-              })}
+              {COLUMNS.filter(c => c !== task.column).map(c => (
+                <StatusPill
+                  key={c}
+                  status={c}
+                  onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
+                />
+              ))}
             </div>
           </div>
 
@@ -1500,7 +1531,7 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
         }
       } : undefined}
     >
-      {/* Header Aurora: título Inter Tight 19/600 + contador Fraunces 28, ambos na cor do status */}
+      {/* Header Aurora: título Inter Tight 21/600 + contador Fraunces 22, ambos na cor do status */}
       <div
         onClick={onCollapse || undefined}
         title={onCollapse ? "Clique para recolher" : undefined}
@@ -1515,12 +1546,12 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
       >
         <span style={{
           fontFamily: '"Inter Tight", Inter, sans-serif',
-          fontSize: 19, fontWeight: 600, letterSpacing: -0.3,
+          fontSize: 21, fontWeight: 600, letterSpacing: -0.3,
           color: accent, whiteSpace: "nowrap", flex: 1, lineHeight: 1,
         }}>{name}</span>
         <span style={{
           fontFamily: 'Fraunces, serif',
-          fontSize: 28, fontWeight: 500, lineHeight: 0.9, letterSpacing: -1,
+          fontSize: 22, fontWeight: 500, lineHeight: 0.9, letterSpacing: -1,
           color: accent, fontVariantNumeric: "tabular-nums",
         }}>{String(tasks.length).padStart(2, "0")}</span>
         {onCollapse && (
@@ -1618,8 +1649,7 @@ function App() {
   // Atualiza título da aba e cor de fundo sutil conforme scope
   useEffect(() => {
     document.title = scope === "pessoal" ? "COFIT — Pessoal" : "COFIT — Trabalho";
-    // Tom quente (âmbar muito sutil) para pessoal; tom frio padrão para trabalho
-    document.body.style.background = scope === "pessoal" ? "#0d1220" : "#0c1224";
+    document.body.style.background = SCOPE_BG[scope];
   }, [scope]);
 
   // Cursor grabbing durante DnD
@@ -2100,7 +2130,7 @@ function App() {
       )}
 
       {/* ── Header desktop ── */}
-      <header className="desktop-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "12px 22px", alignItems: "center", gap: 18, flexWrap: "wrap", borderBottom: `1px solid ${AU.hair}`, borderTop: `3px solid ${scope === "pessoal" ? "#d97706" : "#4f46e5"}` }}>
+      <header className="desktop-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "12px 22px", alignItems: "center", gap: 18, flexWrap: "wrap", borderBottom: `1px solid ${AU.hair}` }}>
         <span style={{ fontFamily: "Fraunces, serif", fontSize: 20, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
         <span style={{ fontFamily: "Fraunces, serif", fontSize: 12.5, color: AU.inkMid, fontStyle: "italic", letterSpacing: 0.1 }}>Task Manager</span>
         <div style={{ height: 14, width: 1, background: AU.hair }} />
@@ -2118,13 +2148,23 @@ function App() {
             <span style={{ opacity: 0.8, marginLeft: 5 }}>concluída{doneToday !== 1 ? "s" : ""} hoje</span>
           </span>
         </div>
-        {/* Toggle Trabalho / Pessoal */}
+        {/* Toggle Trabalho / Pessoal — segmented control neutro */}
         <div style={{ display: "flex", gap: 2, background: AU.surface, borderRadius: 8, padding: 3, border: `1px solid ${AU.hair}` }}>
-          {["trabalho", "pessoal"].map(s => (
-            <button key={s} onClick={() => switchScope(s)} style={{ padding: "4px 13px", borderRadius: 6, border: "none", background: scope === s ? (s === "pessoal" ? "#d97706" : "#4f46e5") : "transparent", color: scope === s ? "#fff" : AU.inkMid, fontWeight: 600, fontSize: 11.5, fontFamily: "inherit", cursor: "pointer", transition: "all 0.15s", letterSpacing: 0.2 }}>
-              {s === "trabalho" ? "🏢 Trabalho" : "🏠 Pessoal"}
-            </button>
-          ))}
+          {["trabalho", "pessoal"].map(s => {
+            const active = scope === s;
+            return (
+              <button key={s} onClick={() => switchScope(s)} style={{
+                padding: "4px 13px", borderRadius: 6, border: "none",
+                background: active ? AU.surfaceHi : "transparent",
+                color: active ? AU.ink : AU.inkLow,
+                fontWeight: active ? 700 : 500,
+                fontSize: 11.5, fontFamily: "inherit", cursor: "pointer",
+                transition: "all 0.15s", letterSpacing: 0.2,
+              }}>
+                {s === "trabalho" ? "💼 Trabalho" : "🏠 Pessoal"}
+              </button>
+            );
+          })}
         </div>
         {/* Botão Glossário */}
         <button onClick={() => openGlossaryWithPrefill(null)} title="Glossário" style={{ padding: "5px 11px", borderRadius: 6, border: `1px solid ${AU.hair}`, background: "transparent", color: AU.inkMid, fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
@@ -2164,16 +2204,25 @@ function App() {
       </header>
 
       {/* ── Header mobile ── */}
-      <header className="mobile-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderBottom: `1px solid ${AU.hair}`, borderTop: `3px solid ${scope === "pessoal" ? "#d97706" : "#4f46e5"}`, flexDirection: "column" }}>
+      <header className="mobile-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderBottom: `1px solid ${AU.hair}`, flexDirection: "column" }}>
         <div style={{ display: "flex", width: "100%", alignItems: "center", gap: 10 }}>
           <span style={{ fontFamily: "Fraunces, serif", fontSize: 18, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
-          {/* Toggle mobile */}
+          {/* Toggle mobile — segmented control neutro */}
           <div style={{ display: "flex", gap: 1, background: AU.surface, borderRadius: 6, padding: 2, border: `1px solid ${AU.hair}` }}>
-            {["trabalho", "pessoal"].map(s => (
-              <button key={s} onClick={() => switchScope(s)} style={{ padding: "3px 8px", borderRadius: 5, border: "none", background: scope === s ? (s === "pessoal" ? "#d97706" : "#4f46e5") : "transparent", color: scope === s ? "#fff" : AU.inkMid, fontWeight: 600, fontSize: 10, fontFamily: "inherit", cursor: "pointer" }}>
-                {s === "trabalho" ? "💼" : "🏠"}
-              </button>
-            ))}
+            {["trabalho", "pessoal"].map(s => {
+              const active = scope === s;
+              return (
+                <button key={s} onClick={() => switchScope(s)} style={{
+                  padding: "3px 8px", borderRadius: 5, border: "none",
+                  background: active ? AU.surfaceHi : "transparent",
+                  color: active ? AU.ink : AU.inkLow,
+                  fontWeight: active ? 700 : 500,
+                  fontSize: 10, fontFamily: "inherit", cursor: "pointer",
+                }}>
+                  {s === "trabalho" ? "💼" : "🏠"}
+                </button>
+              );
+            })}
           </div>
           <div style={{ flex: 1 }}>
             <select
