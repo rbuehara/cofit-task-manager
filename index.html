@@ -207,7 +207,7 @@ const statusBgStrong = (hex) => `color-mix(in oklch, ${hex} 28%, transparent)`;
 /* Fundo da página por scope — diferença clara mas não berrante */
 const SCOPE_BG = {
   trabalho: "#0c1224",  // azul-quase-preto padrão
-  pessoal:  "#1a1410",  // marrom-quase-preto, mesma luminância
+  pessoal:  "#1c1008",  // marrom-escuro, claramente distinto do azul
 };
 /* Aurora surface tokens (espelham as CSS vars p/ uso em styles inline) */
 const AU = {
@@ -1297,17 +1297,13 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
       {/* Inbox (colIndex=0): pills Aurora de destino + ↑↓, sempre visíveis */}
       {!open && !isNew && colIndex === 0 && (
         <div style={{ display: "flex", gap: 5, padding: "0 16px 14px", alignItems: "center", flexWrap: "wrap" }}>
-          {COLUMNS.filter(c => c !== task.column).map(c => {
-            const acc = COL_ACCENT[c];
-            return (
-              <button key={c} onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
-                style={{
-                  border: "none", background: statusBg(acc), color: acc,
-                  fontSize: 11, fontWeight: 600, padding: "4px 11px", borderRadius: 999,
-                  cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-                }}>{c}</button>
-            );
-          })}
+          {COLUMNS.filter(c => c !== task.column).map(c => (
+            <StatusPill
+              key={c}
+              status={c}
+              onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
+            />
+          ))}
           <div style={{ flex: 1, minWidth: 4 }} />
           {onReorder && (
             <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering}
