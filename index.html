@@ -2189,7 +2189,7 @@ function App() {
               <button key={s} onClick={() => switchScope(s)} style={{
                 display: "flex", alignItems: "center", gap: 7,
                 padding: "6px 14px", borderRadius: 8,
-                border: `1px solid ${active ? activeBd : AU.hair}`,
+                border: "none",
                 background: active ? activeBg : "transparent",
                 color: active ? AU.ink : AU.inkLow,
                 fontWeight: active ? 700 : 500,
@@ -2254,7 +2254,7 @@ function App() {
               return (
                 <button key={s} onClick={() => switchScope(s)} title={isWork ? "Trabalho" : "Pessoal"} style={{
                   padding: "4px 9px", borderRadius: 6,
-                  border: `1px solid ${active ? activeBd : AU.hair}`,
+                  border: "none",
                   background: active ? activeBg : "transparent",
                   color: active ? AU.ink : AU.inkLow,
                   fontSize: 13, fontFamily: "inherit", cursor: "pointer", lineHeight: 1,
