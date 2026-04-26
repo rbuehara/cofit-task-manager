@@ -204,10 +204,20 @@ const COL_ACCENT = {
 /* helpers de pill bg (alpha sobre transparente, p/ usar em fundo dark) */
 const statusBg       = (hex) => `color-mix(in oklch, ${hex} 18%, transparent)`;
 const statusBgStrong = (hex) => `color-mix(in oklch, ${hex} 28%, transparent)`;
-/* Fundo da página por scope — diferença clara mas não berrante */
+/* Fundo da página por scope — Opção A: Azul-aço + Âmbar queimado */
 const SCOPE_BG = {
-  trabalho: "#0c1224",  // azul-quase-preto padrão
-  pessoal:  "#1c1008",  // marrom-escuro, claramente distinto do azul
+  trabalho: "#0F1B2D",  // azul profundo, frio
+  pessoal:  "#1F1814",  // marrom-carvão, quente
+};
+/* Barra superior do header por scope — 4px sólida */
+const SCOPE_BAR = {
+  trabalho: "#1B3358",
+  pessoal:  "#3A2A1F",
+};
+/* Acento por scope — usado em contadores do header e nome do scope ativo */
+const SCOPE_ACCENT = {
+  trabalho: "#4A9EFF",  // azul claro
+  pessoal:  "#E8A87C",  // âmbar suave
 };
 /* Aurora surface tokens (espelham as CSS vars p/ uso em styles inline) */
 const AU = {
@@ -2126,16 +2136,16 @@ function App() {
       )}
 
       {/* ── Header desktop ── */}
-      <header className="desktop-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "12px 22px", alignItems: "center", gap: 18, flexWrap: "wrap", borderBottom: `1px solid ${AU.hair}` }}>
+      <header className="desktop-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "12px 22px", alignItems: "center", gap: 18, flexWrap: "wrap", borderTop: `4px solid ${SCOPE_BAR[scope]}`, borderBottom: `1px solid ${AU.hair}` }}>
         <span style={{ fontFamily: "Fraunces, serif", fontSize: 20, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
         <span style={{ fontFamily: "Fraunces, serif", fontSize: 12.5, color: AU.inkMid, fontStyle: "italic", letterSpacing: 0.1 }}>Task Manager</span>
         <div style={{ height: 14, width: 1, background: AU.hair }} />
         <div style={{ display: "flex", gap: 18, fontFamily: "Manrope, sans-serif", fontSize: 17, fontWeight: 500 }}>
-          <span style={{ color: COL_ACCENT.Snooze }}>
+          <span style={{ color: SCOPE_ACCENT[scope] }}>
             <strong style={{ fontWeight: 700 }}>{activeN}</strong>
             <span style={{ opacity: 0.8, marginLeft: 5 }}>ativa{activeN !== 1 ? "s" : ""}</span>
           </span>
-          <span style={{ color: COL_ACCENT["Em andamento"] }}>
+          <span style={{ color: SCOPE_ACCENT[scope] }}>
             <strong style={{ fontWeight: 700 }}>{doingN}</strong>
             <span style={{ opacity: 0.8, marginLeft: 5 }}>em andamento</span>
           </span>
@@ -2200,7 +2210,7 @@ function App() {
       </header>
 
       {/* ── Header mobile ── */}
-      <header className="mobile-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderBottom: `1px solid ${AU.hair}`, flexDirection: "column" }}>
+      <header className="mobile-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderTop: `4px solid ${SCOPE_BAR[scope]}`, borderBottom: `1px solid ${AU.hair}`, flexDirection: "column" }}>
         <div style={{ display: "flex", width: "100%", alignItems: "center", gap: 10 }}>
           <span style={{ fontFamily: "Fraunces, serif", fontSize: 18, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
           {/* Toggle mobile — segmented control neutro */}
