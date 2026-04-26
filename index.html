@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-<title>COFIT Task Manager</title>
+<title>Alfredo</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%A9%3C/text%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter+Tight:wght@450;500;600&family=Manrope:wght@500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
@@ -95,7 +96,7 @@ input:focus, textarea:focus, select:focus { border-color: #4f46e5 !important; ou
   padding: 36px 32px; max-width: 360px; width: 92%;
   box-shadow: 0 24px 48px rgba(0,0,0,0.22);
 }
-#auth-box h2 { margin: 0 0 4px; font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; }
+#auth-box h2 { margin: 0 0 4px; font-family: 'Fraunces', serif; font-size: 30px; font-weight: 600; font-style: italic; color: #0f172a; letter-spacing: -0.8px; }
 #auth-box p { margin: 0 0 22px; font-size: 12px; color: #64748b; }
 #auth-input {
   width: 100%; padding: 9px 11px; border-radius: 7px;
@@ -129,8 +130,8 @@ window.showPasswordPrompt = function(onSuccess) {
   overlay.id = "auth-overlay";
   overlay.innerHTML = `
     <div id="auth-box">
-      <h2>COFIT</h2>
-      <p>Digite a senha de acesso para continuar.</p>
+      <h2>Alfredo</h2>
+      <p>Às ordens. Digite a senha para continuar.</p>
       <input id="auth-input" type="password" placeholder="Senha..." autocomplete="current-password" />
       <button id="auth-btn">Entrar</button>
       <p id="auth-err">Senha incorreta. Tente novamente.</p>
@@ -224,13 +225,13 @@ const SCOPE_ACCENT = {
    Pessoal: família marrom-quente, mesma luminância relativa do azul. */
 const SCOPE_THEME = {
   trabalho: {
-    headerBg:    "#0f1730",  // = AU.surfaceAlt
+    headerBg:    "#0F1B2D",  // = SCOPE_BG.trabalho — header se funde ao fundo (paleta de 2 tons)
     cardBg:      "#1a2240",  // = AU.surface
     cardBgHi:    "#222b4d",  // = AU.surfaceHi
     hair:        "#2a3352",  // = AU.hair
   },
   pessoal: {
-    headerBg:    "#1A130E",  // marrom-carvão escuro
+    headerBg:    "#241812",  // = SCOPE_BG.pessoal — mesmo princípio: header = fundo
     cardBg:      "#2A1F18",  // marrom médio
     cardBgHi:    "#352720",  // marrom médio claro (expandido)
     hair:        "#3D2D24",  // hairline marrom
@@ -1676,7 +1677,7 @@ function App() {
 
   // Atualiza título da aba e cor de fundo sutil conforme scope
   useEffect(() => {
-    document.title = scope === "pessoal" ? "COFIT — Pessoal" : "COFIT — Trabalho";
+    document.title = scope === "pessoal" ? "Alfredo — Pessoal" : "Alfredo — Trabalho";
     document.body.style.background = SCOPE_BG[scope];
   }, [scope]);
 
@@ -2159,8 +2160,7 @@ function App() {
 
       {/* ── Header desktop ── */}
       <header className="desktop-only" style={{ background: SCOPE_THEME[scope].headerBg, color: AU.ink, padding: "12px 22px", alignItems: "center", gap: 18, flexWrap: "wrap", borderTop: `4px solid ${SCOPE_BAR[scope]}`, borderBottom: `1px solid ${SCOPE_THEME[scope].hair}` }}>
-        <span style={{ fontFamily: "Fraunces, serif", fontSize: 20, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
-        <span style={{ fontFamily: "Fraunces, serif", fontSize: 12.5, color: AU.inkMid, fontStyle: "italic", letterSpacing: 0.1 }}>Task Manager</span>
+        <span style={{ fontFamily: "Fraunces, serif", fontSize: 26, fontWeight: 600, fontStyle: "italic", letterSpacing: -0.8, color: AU.ink }}>Alfredo</span>
         <div style={{ height: 14, width: 1, background: AU.hair }} />
         <div style={{ display: "flex", gap: 18, fontFamily: "Manrope, sans-serif", fontSize: 17, fontWeight: 500 }}>
           <span style={{ color: SCOPE_ACCENT[scope] }}>
@@ -2176,20 +2176,28 @@ function App() {
             <span style={{ opacity: 0.8, marginLeft: 5 }}>concluída{doneToday !== 1 ? "s" : ""} hoje</span>
           </span>
         </div>
-        {/* Toggle Trabalho / Pessoal — segmented control neutro */}
-        <div style={{ display: "flex", gap: 2, background: AU.surface, borderRadius: 8, padding: 3, border: `1px solid ${AU.hair}` }}>
+        {/* Toggle Trabalho / Pessoal — pílulas coloridas por scope */}
+        <div style={{ display: "flex", gap: 6 }}>
           {["trabalho", "pessoal"].map(s => {
             const active = scope === s;
+            const isWork = s === "trabalho";
+            const activeBg   = isWork ? "#1B3358" : "#3A2A1F";
+            const activeBd   = isWork ? "#2A4A75" : "#54402F";
+            const icon       = isWork ? "🧳" : "🏠";
+            const label      = isWork ? "Trabalho" : "Pessoal";
             return (
               <button key={s} onClick={() => switchScope(s)} style={{
-                padding: "4px 13px", borderRadius: 6, border: "none",
-                background: active ? AU.surfaceHi : "transparent",
+                display: "flex", alignItems: "center", gap: 7,
+                padding: "6px 14px", borderRadius: 8,
+                border: `1px solid ${active ? activeBd : AU.hair}`,
+                background: active ? activeBg : "transparent",
                 color: active ? AU.ink : AU.inkLow,
                 fontWeight: active ? 700 : 500,
-                fontSize: 11.5, fontFamily: "inherit", cursor: "pointer",
-                transition: "all 0.15s", letterSpacing: 0.2,
+                fontSize: 12.5, fontFamily: "inherit", cursor: "pointer",
+                transition: "all 0.15s", letterSpacing: 0.1,
               }}>
-                {s === "trabalho" ? "💼 Trabalho" : "🏠 Pessoal"}
+                <span style={{ fontSize: 14, lineHeight: 1 }}>{icon}</span>
+                <span>{label}</span>
               </button>
             );
           })}
@@ -2234,21 +2242,23 @@ function App() {
       {/* ── Header mobile ── */}
       <header className="mobile-only" style={{ background: SCOPE_THEME[scope].headerBg, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderTop: `4px solid ${SCOPE_BAR[scope]}`, borderBottom: `1px solid ${SCOPE_THEME[scope].hair}`, flexDirection: "column" }}>
         <div style={{ display: "flex", width: "100%", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: "Fraunces, serif", fontSize: 18, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
-          {/* Toggle mobile — segmented control neutro */}
-          <div style={{ display: "flex", gap: 1, background: AU.surface, borderRadius: 6, padding: 2, border: `1px solid ${AU.hair}` }}>
+          <span style={{ fontFamily: "Fraunces, serif", fontSize: 22, fontWeight: 600, fontStyle: "italic", letterSpacing: -0.6, color: AU.ink }}>Alfredo</span>
+          {/* Toggle mobile — pílulas coloridas por scope */}
+          <div style={{ display: "flex", gap: 4 }}>
             {["trabalho", "pessoal"].map(s => {
               const active = scope === s;
+              const isWork = s === "trabalho";
+              const activeBg = isWork ? "#1B3358" : "#3A2A1F";
+              const activeBd = isWork ? "#2A4A75" : "#54402F";
+              const icon = isWork ? "🧳" : "🏠";
               return (
-                <button key={s} onClick={() => switchScope(s)} style={{
-                  padding: "3px 8px", borderRadius: 5, border: "none",
-                  background: active ? AU.surfaceHi : "transparent",
+                <button key={s} onClick={() => switchScope(s)} title={isWork ? "Trabalho" : "Pessoal"} style={{
+                  padding: "4px 9px", borderRadius: 6,
+                  border: `1px solid ${active ? activeBd : AU.hair}`,
+                  background: active ? activeBg : "transparent",
                   color: active ? AU.ink : AU.inkLow,
-                  fontWeight: active ? 700 : 500,
-                  fontSize: 10, fontFamily: "inherit", cursor: "pointer",
-                }}>
-                  {s === "trabalho" ? "💼" : "🏠"}
-                </button>
+                  fontSize: 13, fontFamily: "inherit", cursor: "pointer", lineHeight: 1,
+                }}>{icon}</button>
               );
             })}
           </div>
