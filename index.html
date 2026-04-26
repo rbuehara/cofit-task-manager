@@ -1615,9 +1615,11 @@ function App() {
     setShowSilenced(false);
   }, [scope]);
 
-  // Atualiza título da aba conforme scope
+  // Atualiza título da aba e cor de fundo sutil conforme scope
   useEffect(() => {
     document.title = scope === "pessoal" ? "COFIT — Pessoal" : "COFIT — Trabalho";
+    // Tom quente (âmbar muito sutil) para pessoal; tom frio padrão para trabalho
+    document.body.style.background = scope === "pessoal" ? "#0d1220" : "#0c1224";
   }, [scope]);
 
   // Cursor grabbing durante DnD
@@ -2098,7 +2100,7 @@ function App() {
       )}
 
       {/* ── Header desktop ── */}
-      <header className="desktop-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "12px 22px", alignItems: "center", gap: 18, flexWrap: "wrap", borderBottom: `1px solid ${AU.hair}` }}>
+      <header className="desktop-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "12px 22px", alignItems: "center", gap: 18, flexWrap: "wrap", borderBottom: `1px solid ${AU.hair}`, borderTop: `3px solid ${scope === "pessoal" ? "#d97706" : "#4f46e5"}` }}>
         <span style={{ fontFamily: "Fraunces, serif", fontSize: 20, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
         <span style={{ fontFamily: "Fraunces, serif", fontSize: 12.5, color: AU.inkMid, fontStyle: "italic", letterSpacing: 0.1 }}>Task Manager</span>
         <div style={{ height: 14, width: 1, background: AU.hair }} />
@@ -2162,7 +2164,7 @@ function App() {
       </header>
 
       {/* ── Header mobile ── */}
-      <header className="mobile-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderBottom: `1px solid ${AU.hair}`, flexDirection: "column" }}>
+      <header className="mobile-only" style={{ background: AU.surfaceAlt, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderBottom: `1px solid ${AU.hair}`, borderTop: `3px solid ${scope === "pessoal" ? "#d97706" : "#4f46e5"}`, flexDirection: "column" }}>
         <div style={{ display: "flex", width: "100%", alignItems: "center", gap: 10 }}>
           <span style={{ fontFamily: "Fraunces, serif", fontSize: 18, fontWeight: 600, letterSpacing: -0.5, color: AU.ink }}>Cofit</span>
           {/* Toggle mobile */}

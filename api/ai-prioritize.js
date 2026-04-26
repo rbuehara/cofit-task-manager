@@ -8,7 +8,13 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   try {
-    const { tasks, profile, scope } = req.body; // scope aceito mas ignorado nesta fase
+    const { tasks, profile, scope } = req.body;
+
+    // ai-prioritize é exclusivo do scope de trabalho
+    if (scope === "pessoal") {
+      return res.status(400).json({ error: "ai-prioritize não disponível em scope pessoal" });
+    }
+
     if (!tasks?.length) return res.status(400).json({ error: "No tasks to prioritize" });
 
     const today = new Date().toISOString().split("T")[0];
