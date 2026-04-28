@@ -193,48 +193,85 @@ const { useState, useEffect, useCallback, useRef } = React;
 /* ── Constants ── */
 const COLUMNS = ["Inbox", "A fazer", "Em andamento", "Concluído", "Aguardando", "Snooze", "Algum dia"];
 const COLLAPSIBLE_COLS = ["Concluído", "Aguardando", "Snooze", "Algum dia"]; // recolhidas por padrão (Fase 3.1c)
-const COL_ACCENT = {
-  Inbox:          "#9CA3AF",
-  "A fazer":      "#3B82F6",
-  "Em andamento": "#F59E0B",
-  Concluído:      "#22C55E",
-  Aguardando:     "#8B5CF6",
-  Snooze:         "#06B6D4",
-  "Algum dia":    "#E879A0",
+/* Accents de coluna por scope.
+   Trabalho: paleta Aurora original (calibrada para fundo escuro).
+   Pessoal: recalibrado para fundo claro (papel #FAF7F0) — hues escurecidos/dessaturados
+            para evitar berros sobre bege. */
+const COL_ACCENT_BY_SCOPE = {
+  trabalho: {
+    Inbox:          "#9CA3AF",
+    "A fazer":      "#3B82F6",
+    "Em andamento": "#F59E0B",
+    Concluído:      "#22C55E",
+    Aguardando:     "#8B5CF6",
+    Snooze:         "#06B6D4",
+    "Algum dia":    "#E879A0",
+  },
+  pessoal: {
+    Inbox:          "#6B7280",
+    "A fazer":      "#1E5BB8",
+    "Em andamento": "#B26321",
+    Concluído:      "#15803D",
+    Aguardando:     "#6B46C1",
+    Snooze:         "#0E7490",
+    "Algum dia":    "#BE185D",
+  },
 };
-/* helpers de pill bg (alpha sobre transparente, p/ usar em fundo dark) */
+const getColAccent = (scope) => COL_ACCENT_BY_SCOPE[scope] || COL_ACCENT_BY_SCOPE.trabalho;
+/* Compat: COL_ACCENT continua existindo apontando para trabalho — usado por callsites
+   que ainda não recebem scope (modais sempre dark). */
+const COL_ACCENT = COL_ACCENT_BY_SCOPE.trabalho;
+/* helpers de pill bg.
+   statusBg/statusBgStrong: alpha sobre transparente, para fundo dark (trabalho).
+   statusBgLight: tint claro do hue, para fundo claro (pessoal). */
 const statusBg       = (hex) => `color-mix(in oklch, ${hex} 18%, transparent)`;
 const statusBgStrong = (hex) => `color-mix(in oklch, ${hex} 28%, transparent)`;
-/* Fundo da página por scope — Opção A: Azul-aço + Âmbar queimado */
+const statusBgLight  = (hex) => `color-mix(in oklch, ${hex} 15%, #FAF7F0)`;
+const statusBgByScope = (hex, scope) => scope === "pessoal" ? statusBgLight(hex) : statusBg(hex);
+/* Fundo da página por scope. */
 const SCOPE_BG = {
   trabalho: "#0F1B2D",  // azul profundo, frio
-  pessoal:  "#241812",  // marrom-carvão, quente — luminância acima do azul, hue claramente quente
+  pessoal:  "#FAF7F0",  // papel quase branco, quente
 };
 /* Barra superior do header por scope — 4px sólida */
 const SCOPE_BAR = {
   trabalho: "#1B3358",
-  pessoal:  "#3A2A1F",
+  pessoal:  "#174D38",  // verde-floresta escuro
 };
 /* Acento por scope — usado em contadores do header e nome do scope ativo */
 const SCOPE_ACCENT = {
   trabalho: "#4A9EFF",  // azul claro
-  pessoal:  "#E8A87C",  // âmbar suave
+  pessoal:  "#174D38",  // verde-floresta escuro
 };
 /* Superfícies por scope — header, card e card expandido.
-   Trabalho: família azul-aço fria (atual).
-   Pessoal: família marrom-quente, mesma luminância relativa do azul. */
+   Trabalho: família azul-aço fria (Aurora dark).
+   Pessoal: família papel/bege clara, com tinta escura sobre fundo bege. */
 const SCOPE_THEME = {
   trabalho: {
-    headerBg:    "#0F1B2D",  // = SCOPE_BG.trabalho — header se funde ao fundo (paleta de 2 tons)
+    headerBg:    "#0F1B2D",  // = SCOPE_BG.trabalho — header se funde ao fundo
     cardBg:      "#1a2240",  // = AU.surface
     cardBgHi:    "#222b4d",  // = AU.surfaceHi
     hair:        "#2a3352",  // = AU.hair
+    metaBg:      "#0f1730",  // = AU.surfaceAlt — bloco "Criado em"
+    btnBg:       "#0f1730",  // = AU.surfaceAlt — fundo das setas e ações no card
+    ink:         "#eef1f7",  // = AU.ink — texto principal
+    inkMid:      "#c2cae0",  // = AU.inkMid
+    inkLow:      "#8892ad",  // = AU.inkLow
+    inkFaint:    "#6a7391",  // = AU.inkFaint
+    overdue:     "#f59e0b",  // âmbar Aurora
   },
   pessoal: {
-    headerBg:    "#241812",  // = SCOPE_BG.pessoal — mesmo princípio: header = fundo
-    cardBg:      "#2A1F18",  // marrom médio
-    cardBgHi:    "#352720",  // marrom médio claro (expandido)
-    hair:        "#3D2D24",  // hairline marrom
+    headerBg:    "#FAF7F0",  // = SCOPE_BG.pessoal — header = fundo
+    cardBg:      "#EDE4D2",  // bege-areia (mock A)
+    cardBgHi:    "#E5DAC0",  // bege médio (expandido)
+    hair:        "#D4C7A8",  // hairline bege
+    metaBg:      "#DDD0B5",  // bege escuro p/ bloco "Criado em"
+    btnBg:       "#DDD0B5",  // bege escuro p/ setas e ações
+    ink:         "#2A231A",  // texto principal — quase preto quente
+    inkMid:      "#5A4F3E",  // texto secundário — marrom-cinza
+    inkLow:      "#8A7E66",  // labels (Criado, Iniciado) — marrom-claro
+    inkFaint:    "#A89B7E",  // texto fantasma
+    overdue:     "#A85F1C",  // âmbar queimado (menos berrante em fundo claro)
   },
 };
 /* Aurora surface tokens (espelham as CSS vars p/ uso em styles inline) */
@@ -362,17 +399,24 @@ const lbl = { display: "block", fontSize: 11.5, fontWeight: 600, color: "#475569
 const btnP = { padding: "7px 16px", borderRadius: 6, border: "none", background: "#4f46e5", color: "#fff", fontWeight: 600, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" };
 const btnG = { padding: "7px 12px", borderRadius: 6, border: "1.5px solid #e2e8f0", background: "transparent", color: "#64748b", fontWeight: 500, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" };
 const btnS = { padding: "3px 8px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 10.5, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 };
-/* Aurora card: surface dark; o acento da coluna aparece na top strip (não mais no border-left).
+/* Card surface: o acento da coluna aparece na top strip (não mais no border-left).
    overflow:visible — overflow:hidden cortava tags/footnote em cards estreitos.
-   scope: define a família de cor da superfície (azul/marrom). Default = trabalho. */
+   scope: define a família de cor da superfície + intensidade da sombra.
+   Trabalho (dark): sombras pretas fortes, highlight superior translúcido.
+   Pessoal (claro): sombras suaves marrom-quentes, sem highlight superior. */
 const cardBase = (accent, expanded, scope = "trabalho") => {
   const t = SCOPE_THEME[scope] || SCOPE_THEME.trabalho;
+  const isLight = scope === "pessoal";
   return {
     background: expanded ? t.cardBgHi : t.cardBg,
     borderRadius: 10,
     boxShadow: expanded
-      ? `0 16px 48px rgba(0,0,0,.5), 0 0 0 1px ${t.hair}`
-      : "0 2px 0 rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.03)",
+      ? (isLight
+          ? `0 8px 24px rgba(80,60,30,.18), 0 0 0 1px ${t.hair}`
+          : `0 16px 48px rgba(0,0,0,.5), 0 0 0 1px ${t.hair}`)
+      : (isLight
+          ? `0 1px 0 rgba(80,60,30,.10), 0 0 0 0.5px ${t.hair}`
+          : "0 2px 0 rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.03)"),
   };
 };
 
@@ -943,10 +987,15 @@ function Banner({ status, onDismiss }) {
   );
 }
 
-function AddForm({ onAdd, busy, initialOpen = false }) {
+function AddForm({ onAdd, busy, initialOpen = false, scope = "trabalho" }) {
   const [title, setTitle] = useState(""); const [desc, setDesc] = useState(""); const [dl, setDl] = useState(""); const [open, setOpen] = useState(initialOpen);
   const submit = () => { if (!title.trim() || busy) return; onAdd({ title: title.trim(), description: desc.trim(), deadline: dl || null }); setTitle(""); setDesc(""); setDl(""); setOpen(false); };
-  if (!open) return <button onClick={() => setOpen(true)} style={{ background: "linear-gradient(180deg, #eef1f7 0%, #c8cfe0 100%)", color: "#0c1224", border: "none", borderRadius: 999, padding: "7px 18px", fontSize: 13, fontWeight: 700, fontFamily: "Manrope, sans-serif", letterSpacing: -0.1, cursor: "pointer" }}>+ Nova tarefa</button>;
+  /* Trabalho: gradiente claro Aurora sobre fundo escuro.
+     Pessoal: verde escuro #174D38 sólido sobre fundo claro. */
+  const triggerStyle = scope === "pessoal"
+    ? { background: "#174D38", color: "#EDE4D2", border: "none", borderRadius: 999, padding: "7px 18px", fontSize: 13, fontWeight: 700, fontFamily: "Manrope, sans-serif", letterSpacing: -0.1, cursor: "pointer" }
+    : { background: "linear-gradient(180deg, #eef1f7 0%, #c8cfe0 100%)", color: "#0c1224", border: "none", borderRadius: 999, padding: "7px 18px", fontSize: 13, fontWeight: 700, fontFamily: "Manrope, sans-serif", letterSpacing: -0.1, cursor: "pointer" };
+  if (!open) return <button onClick={() => setOpen(true)} style={triggerStyle}>+ Nova tarefa</button>;
   return (
     <div style={{ background: "#fff", borderRadius: 10, padding: 14, boxShadow: "0 2px 10px rgba(0,0,0,0.07)", marginBottom: 10 }}>
       <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título..." onKeyDown={e => e.key === "Enter" && submit()} style={{ ...inp, fontWeight: 600, marginBottom: 5 }} autoFocus />
@@ -962,9 +1011,16 @@ function AddForm({ onAdd, busy, initialOpen = false }) {
   );
 }
 
-/* StatusPill — pill reutilizável para "mover para" (Redesign v2) */
-function StatusPill({ status, onClick, onMouseDown }) {
-  const acc = COL_ACCENT[status];
+/* StatusPill — pill reutilizável para "mover para" (Redesign v2).
+   Recebe scope para escolher o accent correto (trabalho dark vs pessoal claro). */
+function StatusPill({ status, onClick, onMouseDown, scope = "trabalho" }) {
+  const acc = getColAccent(scope)[status];
+  /* Em fundo claro (pessoal) o pattern de tint precisa ser mais opaco para
+     contrastar com o card bege; em dark mantém o alpha original. */
+  const bg = scope === "pessoal"
+    ? `color-mix(in oklch, ${acc} 14%, #FAF7F0)`
+    : `${acc}1F`;
+  const bd = scope === "pessoal" ? `${acc}88` : `${acc}55`;
   return (
     <button
       onClick={onClick}
@@ -972,8 +1028,8 @@ function StatusPill({ status, onClick, onMouseDown }) {
       className="status-pill"
       style={{
         "--pill-acc": acc,
-        border: `1px solid ${acc}55`,
-        background: `${acc}1F`,
+        border: `1px solid ${bd}`,
+        background: bg,
         color: acc,
         fontSize: 11,
         fontWeight: 500,
@@ -1003,6 +1059,9 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
   const overdue = isOverdue(task.deadline, task.column);
   const isDone = task.column === "Concluído";
   const stale = isStaleInbox(task);
+  /* Resolve paleta por scope: accents de coluna + tokens de surface/ink. */
+  const accents = getColAccent(scope);
+  const theme = SCOPE_THEME[scope] || SCOPE_THEME.trabalho;
 
   useEffect(() => { setET(task.title); setED(task.description); setEDl(task.deadline || ""); setETags(task.tags || []); }, [task.title, task.description, task.deadline, JSON.stringify(task.tags)]);
 
@@ -1010,12 +1069,12 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
   const save = () => { if (!eT.trim()) return; onEdit(task.id, { title: eT.trim(), description: eD.trim(), deadline: eDl || null, tags: eTags }); setEditing(false); };
 
   if (editing) return (
-    <div style={{ ...cardBase(COL_ACCENT[task.column], true, scope), overflow: "visible", padding: 12, marginBottom: 12 }}>
+    <div style={{ ...cardBase(accents[task.column], true, scope), overflow: "visible", padding: 12, marginBottom: 12 }}>
       <input value={eT} onChange={e => setET(e.target.value)} style={{ ...inp, fontWeight: 600, fontSize: 12, marginBottom: 5 }} autoFocus />
       <textarea value={eD} onChange={e => setED(e.target.value)} rows={3} style={{ ...inp, fontSize: 11, resize: "vertical", marginBottom: 5 }} />
       {/* NEW: editor de tags inline */}
       <TagEditor tags={eTags} allTags={allTags} onChange={setETags} onAddToGlossary={onAddToGlossary} />
-      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 7 }}><span style={{ fontSize: 10, color: AU.inkLow }}>Prazo:</span><input type="date" value={eDl} onChange={e => setEDl(e.target.value)} style={{ ...inp, width: "auto", padding: "3px 5px", fontSize: 10 }} /></div>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 7 }}><span style={{ fontSize: 10, color: theme.inkLow }}>Prazo:</span><input type="date" value={eDl} onChange={e => setEDl(e.target.value)} style={{ ...inp, width: "auto", padding: "3px 5px", fontSize: 10 }} /></div>
       <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
         <button onClick={() => { setET(task.title); setED(task.description); setEDl(task.deadline || ""); setETags(task.tags || []); setEditing(false); }} style={{ ...btnS, background: "#f1f5f9" }}>Cancelar</button>
         <button onClick={save} style={{ ...btnS, background: "#4f46e5", color: "#fff" }}>Salvar</button>
@@ -1023,13 +1082,18 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
     </div>
   );
 
-  /* Card recém-criado: aro índigo destacado (sem quebrar top strip Aurora) */
-  const newStyle = isNew ? {
-    boxShadow: "0 0 0 2px #4f46e5, 0 4px 16px rgba(79,70,229,0.35)",
-  } : {};
+  /* Card recém-criado: aro destacado.
+     Trabalho mantém índigo Aurora; pessoal usa o verde do scope. */
+  const newRingColor = scope === "pessoal" ? "#174D38" : "#4f46e5";
+  const newRingShadow = scope === "pessoal"
+    ? "0 0 0 2px #174D38, 0 4px 16px rgba(23,77,56,0.30)"
+    : "0 0 0 2px #4f46e5, 0 4px 16px rgba(79,70,229,0.35)";
+  const newStyle = isNew ? { boxShadow: newRingShadow } : {};
 
-  const accent = COL_ACCENT[task.column];
-  const stripColor = overdue ? "#ef4444" : stale ? INBOX_STALE_COLOR : accent;
+  const accent = accents[task.column];
+  /* stripColor usa theme.overdue para stale (âmbar coerente com scope) e vermelho fixo
+     para overdue, que precisa gritar mesmo em fundo claro. */
+  const stripColor = overdue ? (scope === "pessoal" ? "#A32D2D" : "#ef4444") : stale ? theme.overdue : accent;
   const overdueDays = overdue ? Math.max(1, Math.floor((Date.now() - new Date(task.deadline).getTime()) / 86_400_000)) : 0;
   const isSnoozeCol = task.column === "Snooze";
   const isAguardCol = task.column === "Aguardando";
@@ -1060,7 +1124,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         ...(aging.level === 3 ? { borderLeft: "3px solid #f87171" } : {}),
       }}
     >
-      {isProc && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(12,18,36,0.72)", borderRadius: 10, zIndex: 2 }}><span style={{ fontSize: 11, color: AU.ink, fontWeight: 600 }}>Processando...</span></div>}
+      {isProc && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: scope === "pessoal" ? "rgba(250,247,240,0.72)" : "rgba(12,18,36,0.72)", borderRadius: 10, zIndex: 2 }}><span style={{ fontSize: 11, color: theme.ink, fontWeight: 600 }}>Processando...</span></div>}
 
       {/* Top strip Aurora: dot + barra até a borda direita do conteúdo + badges */}
       <div onClick={() => { if (!suppressClickRef.current) setOpen(!open); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px 0", cursor: "pointer" }}>
@@ -1070,7 +1134,8 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
           <span style={{
             display: "inline-flex", alignItems: "center", whiteSpace: "nowrap",
             fontSize: 10, fontWeight: 700, letterSpacing: 0.3,
-            color: "#a5b4fc", border: "1px solid #a5b4fc66",
+            color: scope === "pessoal" ? "#174D38" : "#a5b4fc",
+            border: scope === "pessoal" ? "1px solid #174D3866" : "1px solid #a5b4fc66",
             padding: "1px 7px", borderRadius: 999,
             fontFamily: '"JetBrains Mono", ui-monospace, monospace',
           }}>NOVA</span>
@@ -1079,7 +1144,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
           <span style={{
             display: "inline-flex", alignItems: "center", whiteSpace: "nowrap",
             fontSize: 10, fontWeight: 500, letterSpacing: 0.3,
-            color: AU.overdue, border: `1px solid ${AU.overdue}66`,
+            color: theme.overdue, border: `1px solid ${theme.overdue}66`,
             padding: "1px 7px", borderRadius: 999,
           }}>atrasado {overdueDays}d</span>
         )}
@@ -1088,7 +1153,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
             style={{
               display: "inline-flex", alignItems: "center", whiteSpace: "nowrap",
               fontSize: 10, fontWeight: 500, letterSpacing: 0.3,
-              color: INBOX_STALE_COLOR, border: `1px solid ${INBOX_STALE_COLOR}66`,
+              color: theme.overdue, border: `1px solid ${theme.overdue}66`,
               padding: "1px 7px", borderRadius: 999,
             }}>{staleDays(task.createdAt)}d no Inbox</span>
         )}
@@ -1112,7 +1177,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         {/* Título Inter Tight 450/16/1.45 justificado com hyphens */}
         <div style={{
           fontFamily: '"Inter Tight", Inter, sans-serif',
-          fontSize: 16, lineHeight: 1.45, color: AU.ink, letterSpacing: 0.1,
+          fontSize: 16, lineHeight: 1.45, color: theme.ink, letterSpacing: 0.1,
           fontWeight: 450, textAlign: "justify", hyphens: "auto",
           marginBottom: (task.tags?.length || task.deadline || task.aguardando || task.snoozeUntil) ? 12 : 0,
         }}>
@@ -1126,7 +1191,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
             {task.deadline && (
               <span style={{
                 fontSize: 10.5, fontWeight: 500,
-                color: overdue ? AU.overdue : AU.inkMid,
+                color: overdue ? theme.overdue : theme.inkMid,
                 fontFamily: '"JetBrains Mono", ui-monospace, monospace',
                 letterSpacing: 0.2,
               }}>📅 {fmtDateShort(task.deadline)}</span>
@@ -1134,7 +1199,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
             {isAguardCol && task.aguardando && (
               <span style={{
                 display: "inline-flex", alignItems: "center", gap: 5,
-                fontSize: 11.5, color: AU.inkMid, fontWeight: 400,
+                fontSize: 11.5, color: theme.inkMid, fontWeight: 400,
                 width: "100%", lineHeight: 1.4,
               }} title={task.aguardando}>
                 <span style={{ opacity: 0.6, flexShrink: 0 }}>↳</span>
@@ -1144,8 +1209,8 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
             {isSnoozeCol && task.snoozeUntil && (
               <span style={{
                 display: "inline-flex", alignItems: "center", gap: 5,
-                fontSize: 11.5, color: COL_ACCENT.Snooze, fontWeight: 500,
-                background: statusBg(COL_ACCENT.Snooze),
+                fontSize: 11.5, color: accents.Snooze, fontWeight: 500,
+                background: statusBgByScope(accents.Snooze, scope),
                 padding: "3px 9px", borderRadius: 999,
               }}>
                 <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
@@ -1165,18 +1230,19 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
             <StatusPill
               key={c}
               status={c}
+              scope={scope}
               onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
             />
           ))}
           <div style={{ flex: 1, minWidth: 4 }} />
           <button onClick={e => { e.stopPropagation(); setEditing(true); }}
             title="Editar"
-            style={{ background: AU.surfaceAlt, border: "none", color: COL_ACCENT["A fazer"],
+            style={{ background: theme.btnBg, border: "none", color: accents["A fazer"],
               width: 28, height: 26, borderRadius: 6, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
             }}>✎</button>
           <button onClick={e => { e.stopPropagation(); if (confirm("Arquivar esta tarefa no Notion?")) onDelete(task.id); }}
             title="Arquivar no Notion"
-            style={{ background: AU.surfaceAlt, border: "none", color: "#f87171",
+            style={{ background: theme.btnBg, border: "none", color: scope === "pessoal" ? "#A32D2D" : "#f87171",
               width: 28, height: 26, borderRadius: 6, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
             }}>🗑</button>
         </div>
@@ -1189,7 +1255,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
             <p
               onMouseDown={e => e.stopPropagation()}
               style={{
-                fontSize: 13.5, lineHeight: 1.65, color: AU.inkMid,
+                fontSize: 13.5, lineHeight: 1.65, color: theme.inkMid,
                 margin: "0 0 14px", textAlign: "justify", hyphens: "auto",
                 whiteSpace: "pre-wrap", wordBreak: "break-word",
                 cursor: "text", userSelect: "text",
@@ -1200,11 +1266,11 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
           {/* Aguardando: linha com ↳ em ink-mid (sem emoji ⏸) */}
           {task.aguardando && (
             <p style={{
-              fontSize: 12, color: AU.inkMid, margin: "0 0 12px",
+              fontSize: 12, color: theme.inkMid, margin: "0 0 12px",
               wordBreak: "break-word", display: "flex", gap: 6, alignItems: "flex-start",
             }}>
               <span style={{ opacity: 0.6, flexShrink: 0 }}>↳</span>
-              <span><span style={{ color: COL_ACCENT.Aguardando, fontWeight: 500 }}>Aguardando:</span> {task.aguardando}</span>
+              <span><span style={{ color: accents.Aguardando, fontWeight: 500 }}>Aguardando:</span> {task.aguardando}</span>
             </p>
           )}
 
@@ -1212,8 +1278,8 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
           {task.snoozeUntil && (
             <div style={{
               display: "inline-flex", alignItems: "center", gap: 6,
-              fontSize: 11.5, color: COL_ACCENT.Snooze, fontWeight: 500,
-              background: statusBg(COL_ACCENT.Snooze),
+              fontSize: 11.5, color: accents.Snooze, fontWeight: 500,
+              background: statusBgByScope(accents.Snooze, scope),
               padding: "3px 9px", borderRadius: 999,
               marginBottom: 12,
             }}>
@@ -1227,7 +1293,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
           {/* Reason (quando IA sugeriu) — discreto */}
           {task.reason && (
             <p style={{
-              fontSize: 11.5, color: AU.inkFaint, margin: "0 0 12px",
+              fontSize: 11.5, color: theme.inkFaint, margin: "0 0 12px",
               fontStyle: "italic", wordBreak: "break-word",
             }}>💡 {task.reason}</p>
           )}
@@ -1235,28 +1301,28 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
           {/* Duration do concluído */}
           {isDone && task.duration && (
             <p style={{
-              fontSize: 11.5, color: COL_ACCENT.Concluído, margin: "0 0 10px",
+              fontSize: 11.5, color: accents.Concluído, margin: "0 0 10px",
               fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontWeight: 500,
             }}>⏱ {task.duration}</p>
           )}
 
-          {/* Bloco slug/datas em mono sobre surfaceAlt */}
+          {/* Bloco slug/datas em mono sobre metaBg do scope */}
           <div style={{
-            background: AU.surfaceAlt, padding: "10px 12px", borderRadius: 6,
+            background: theme.metaBg, padding: "10px 12px", borderRadius: 6,
             fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-            fontSize: 10.5, color: AU.inkMid, lineHeight: 1.7, marginBottom: 14,
+            fontSize: 10.5, color: theme.inkMid, lineHeight: 1.7, marginBottom: 14,
           }}>
-            <div><span style={{ color: AU.inkLow }}>Criado&nbsp;&nbsp;&nbsp;</span> {fmtDate(task.createdAt)}</div>
-            {task.startedAt && <div><span style={{ color: AU.inkLow }}>Iniciado&nbsp;</span> {fmtDate(task.startedAt)}</div>}
-            {task.completedAt && <div><span style={{ color: AU.inkLow }}>Concluído</span> {fmtDate(task.completedAt)}</div>}
-            {task.deadline && <div><span style={{ color: AU.inkLow }}>Prazo&nbsp;&nbsp;&nbsp;&nbsp;</span> {fmtDateShort(task.deadline)}</div>}
+            <div><span style={{ color: theme.inkLow }}>Criado&nbsp;&nbsp;&nbsp;</span> {fmtDate(task.createdAt)}</div>
+            {task.startedAt && <div><span style={{ color: theme.inkLow }}>Iniciado&nbsp;</span> {fmtDate(task.startedAt)}</div>}
+            {task.completedAt && <div><span style={{ color: theme.inkLow }}>Concluído</span> {fmtDate(task.completedAt)}</div>}
+            {task.deadline && <div><span style={{ color: theme.inkLow }}>Prazo&nbsp;&nbsp;&nbsp;&nbsp;</span> {fmtDateShort(task.deadline)}</div>}
           </div>
 
           {/* Linha âmbar "No Inbox há N dias — aguardando triagem" (opção 1 do brief) */}
           {stale && (
             <div style={{
               display: "flex", alignItems: "center", gap: 7, marginBottom: 14,
-              fontSize: 12.5, color: AU.waitStrong, fontWeight: 500,
+              fontSize: 12.5, color: theme.overdue, fontWeight: 500,
             }}>
               <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
                 <circle cx="6" cy="6" r="4.5"/><path d="M6 3.5v3l1.8 1.2"/>
@@ -1270,7 +1336,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
             marginBottom: 12, paddingBottom: 0,
           }}>
             <div style={{
-              fontSize: 10, color: AU.inkLow, letterSpacing: 0.8,
+              fontSize: 10, color: theme.inkLow, letterSpacing: 0.8,
               textTransform: "uppercase", marginBottom: 7, fontWeight: 500,
               fontFamily: '"JetBrains Mono", ui-monospace, monospace',
             }}>mover para</div>
@@ -1279,6 +1345,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
                 <StatusPill
                   key={c}
                   status={c}
+                  scope={scope}
                   onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
                 />
               ))}
@@ -1287,14 +1354,14 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
 
           {/* Toolbar ↑ ↓ ✨ ✏️ 🗑 (snooze vai pela pill ciano acima) */}
           <div style={{
-            paddingTop: 12, borderTop: `1px solid ${AU.hairSoft}`,
-            display: "flex", gap: 6, color: AU.inkMid, flexWrap: "wrap",
+            paddingTop: 12, borderTop: `1px solid ${theme.hair}`,
+            display: "flex", gap: 6, color: theme.inkMid, flexWrap: "wrap",
           }}>
             <div style={{ flex: 1 }} />
             {!isDone && onReorder && (
               <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering}
                 title="Mover para cima"
-                style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+                style={{ background: theme.btnBg, border: "none", color: theme.inkMid,
                   width: 30, height: 28, borderRadius: 6, fontSize: 13,
                   cursor: reordering ? "not-allowed" : "pointer", opacity: reordering ? 0.4 : 1, fontFamily: "inherit",
                 }}>{reordering ? "⏳" : "↑"}</button>
@@ -1302,24 +1369,24 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
             {!isDone && onReorder && (
               <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering}
                 title="Mover para baixo"
-                style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+                style={{ background: theme.btnBg, border: "none", color: theme.inkMid,
                   width: 30, height: 28, borderRadius: 6, fontSize: 13,
                   cursor: reordering ? "not-allowed" : "pointer", opacity: reordering ? 0.4 : 1, fontFamily: "inherit",
                 }}>{reordering ? "⏳" : "↓"}</button>
             )}
             <button onClick={e => { e.stopPropagation(); onImprove(task.id); }}
               title="Melhorar com IA"
-              style={{ background: AU.surfaceAlt, border: "none", color: "#a5b4fc",
+              style={{ background: theme.btnBg, border: "none", color: scope === "pessoal" ? "#6B46C1" : "#a5b4fc",
                 width: 30, height: 28, borderRadius: 6, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
               }}>✨</button>
             <button onClick={e => { e.stopPropagation(); setEditing(true); }}
               title="Editar"
-              style={{ background: AU.surfaceAlt, border: "none", color: COL_ACCENT["A fazer"],
+              style={{ background: theme.btnBg, border: "none", color: accents["A fazer"],
                 width: 30, height: 28, borderRadius: 6, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
               }}>✎</button>
             <button onClick={e => { e.stopPropagation(); if (confirm("Arquivar esta tarefa no Notion?")) onDelete(task.id); }}
               title="Arquivar no Notion"
-              style={{ background: AU.surfaceAlt, border: "none", color: "#f87171",
+              style={{ background: theme.btnBg, border: "none", color: scope === "pessoal" ? "#A32D2D" : "#f87171",
                 width: 30, height: 28, borderRadius: 6, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
               }}>🗑</button>
           </div>
@@ -1333,6 +1400,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
             <StatusPill
               key={c}
               status={c}
+              scope={scope}
               onClick={e => { e.stopPropagation(); onMove(task.id, c); }}
             />
           ))}
@@ -1340,7 +1408,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
           {onReorder && (
             <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering}
               title="Mover para cima"
-              style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+              style={{ background: theme.btnBg, border: "none", color: theme.inkMid,
                 width: 26, height: 24, borderRadius: 6, fontSize: 12,
                 cursor: reordering ? "not-allowed" : "pointer", opacity: reordering ? 0.4 : 1, fontFamily: "inherit",
               }}>{reordering ? "⏳" : "↑"}</button>
@@ -1348,7 +1416,7 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
           {onReorder && (
             <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering}
               title="Mover para baixo"
-              style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+              style={{ background: theme.btnBg, border: "none", color: theme.inkMid,
                 width: 26, height: 24, borderRadius: 6, fontSize: 12,
                 cursor: reordering ? "not-allowed" : "pointer", opacity: reordering ? 0.4 : 1, fontFamily: "inherit",
               }}>{reordering ? "⏳" : "↓"}</button>
@@ -1356,29 +1424,29 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
         </div>
       )}
 
-      {/* Outras colunas: hover-actions (setas ←→ + ↑↓) em tema dark */}
+      {/* Outras colunas: hover-actions (setas ←→ + ↑↓) em tema do scope */}
       {!open && !isNew && colIndex > 0 && (
         <div className="hover-actions" style={{ position: "absolute", right: 8, top: 8, display: "none", gap: 3 }}>
           <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex - 1]); }}
-            style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+            style={{ background: theme.btnBg, border: "none", color: theme.inkMid,
               width: 22, height: 20, borderRadius: 5, fontSize: 10, cursor: "pointer", fontFamily: "inherit",
             }}>←</button>
           {colIndex < COLUMNS.length - 1 && (
             <button onClick={e => { e.stopPropagation(); onMove(task.id, COLUMNS[colIndex + 1]); }}
-              style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+              style={{ background: theme.btnBg, border: "none", color: theme.inkMid,
                 width: 22, height: 20, borderRadius: 5, fontSize: 10, cursor: "pointer", fontFamily: "inherit",
               }}>→</button>
           )}
           {onReorder && (
             <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "up"); }} disabled={reordering}
-              style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+              style={{ background: theme.btnBg, border: "none", color: theme.inkMid,
                 width: 22, height: 20, borderRadius: 5, fontSize: 10,
                 cursor: reordering ? "not-allowed" : "pointer", opacity: reordering ? 0.4 : 1, fontFamily: "inherit",
               }} title="Mover para cima">{reordering ? "⏳" : "↑"}</button>
           )}
           {onReorder && (
             <button onClick={e => { e.stopPropagation(); if (!reordering) onReorder(task.id, "down"); }} disabled={reordering}
-              style={{ background: AU.surfaceAlt, border: "none", color: AU.inkMid,
+              style={{ background: theme.btnBg, border: "none", color: theme.inkMid,
                 width: 22, height: 20, borderRadius: 5, fontSize: 10,
                 cursor: reordering ? "not-allowed" : "pointer", opacity: reordering ? 0.4 : 1, fontFamily: "inherit",
               }} title="Mover para baixo">{reordering ? "⏳" : "↓"}</button>
@@ -1390,8 +1458,10 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
 }
 
 /* ── SearchInput ── */
-function SearchInput({ value, onChange, count, mobile }) {
+function SearchInput({ value, onChange, count, mobile, scope = "trabalho" }) {
   const ref = useRef(null);
+  const theme = SCOPE_THEME[scope] || SCOPE_THEME.trabalho;
+  const accents = getColAccent(scope);
 
   useEffect(() => {
     const h = (e) => {
@@ -1413,7 +1483,7 @@ function SearchInput({ value, onChange, count, mobile }) {
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 6 }}>
       <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-        <span style={{ position: "absolute", left: 8, fontSize: 12, color: AU.inkFaint, pointerEvents: "none", lineHeight: 1 }}>🔍</span>
+        <span style={{ position: "absolute", left: 8, fontSize: 12, color: theme.inkFaint, pointerEvents: "none", lineHeight: 1 }}>🔍</span>
         <input
           ref={ref}
           value={value}
@@ -1425,9 +1495,9 @@ function SearchInput({ value, onChange, count, mobile }) {
           style={{
             padding: "5px 28px 5px 26px",
             borderRadius: 6,
-            border: `1.5px solid ${hasText ? COL_ACCENT["Em andamento"] + "88" : AU.hair}`,
-            background: AU.surface,
-            color: AU.ink,
+            border: `1.5px solid ${hasText ? accents["Em andamento"] + "88" : theme.hair}`,
+            background: theme.cardBg,
+            color: theme.ink,
             fontSize: 12,
             fontFamily: "inherit",
             outline: "none",
@@ -1441,7 +1511,7 @@ function SearchInput({ value, onChange, count, mobile }) {
             onClick={() => { onChange(""); ref.current?.focus(); }}
             style={{
               position: "absolute", right: 5,
-              background: "transparent", border: "none", color: AU.inkFaint,
+              background: "transparent", border: "none", color: theme.inkFaint,
               fontSize: 14, cursor: "pointer", padding: "0 2px", lineHeight: 1,
               display: "flex", alignItems: "center",
             }}
@@ -1451,7 +1521,7 @@ function SearchInput({ value, onChange, count, mobile }) {
       </div>
       {hasText && (
         <span style={{
-          fontSize: 11, color: count > 0 ? COL_ACCENT["A fazer"] : AU.inkFaint,
+          fontSize: 11, color: count > 0 ? accents["A fazer"] : theme.inkFaint,
           fontFamily: '"JetBrains Mono", ui-monospace, monospace',
           fontWeight: 600, whiteSpace: "nowrap",
         }}>
@@ -1463,8 +1533,8 @@ function SearchInput({ value, onChange, count, mobile }) {
 }
 
 /* ── CollapsiblePill: exibida no header quando uma coluna está recolhida ── */
-function CollapsiblePill({ name, count, onExpand }) {
-  const accent = COL_ACCENT[name];
+function CollapsiblePill({ name, count, onExpand, scope = "trabalho" }) {
+  const accent = getColAccent(scope)[name];
   return (
     <button
       onClick={onExpand}
@@ -1473,7 +1543,7 @@ function CollapsiblePill({ name, count, onExpand }) {
         display: "inline-flex", alignItems: "baseline", gap: 7,
         padding: "4px 12px", borderRadius: 999,
         border: "none",
-        background: statusBg(accent),
+        background: statusBgByScope(accent, scope),
         color: accent,
         fontFamily: '"Inter Tight", Inter, sans-serif',
         fontSize: 12.5, fontWeight: 600, letterSpacing: -0.2,
@@ -1506,7 +1576,8 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
   const [showAll, setShowAll] = useState(false);
   const containerRef = useRef(null);
   const isDone = name === "Concluído";
-  const accent = COL_ACCENT[name];
+  const accent = getColAccent(scope)[name];
+  const theme = SCOPE_THEME[scope] || SCOPE_THEME.trabalho;
 
   /* Card novo sempre no topo; Snooze ordenado por snoozeUntil asc; demais por ordem */
   const isSnooze = name === "Snooze";
@@ -1566,7 +1637,7 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
         style={{
           display: "flex", alignItems: "baseline", gap: 12,
           padding: "14px 14px 11px",
-          borderBottom: `1px solid ${isDropTarget ? accent + "55" : AU.hair}`,
+          borderBottom: `1px solid ${isDropTarget ? accent + "55" : theme.hair}`,
           flexShrink: 0,
           cursor: onCollapse ? "pointer" : "default",
           transition: "border-color 0.15s",
@@ -1583,7 +1654,7 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
           color: accent, fontVariantNumeric: "tabular-nums",
         }}>{String(tasks.length).padStart(2, "0")}</span>
         {onCollapse && (
-          <span style={{ color: AU.inkFaint, fontSize: 12, lineHeight: 1, userSelect: "none", marginLeft: 4 }}>⟨</span>
+          <span style={{ color: theme.inkFaint, fontSize: 12, lineHeight: 1, userSelect: "none", marginLeft: 4 }}>⟨</span>
         )}
       </div>
       <div ref={containerRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "7px 6px 3px", display: "flex", flexDirection: "column", gap: 5 }}>
@@ -1605,7 +1676,7 @@ function Column({ name, tasks, colIndex, onMove, onEdit, onDelete, onImprove, on
           </React.Fragment>
         ))}
         {isDropTarget && dropTarget.index === visible.length && <DropIndicator accent={accent} />}
-        {!tasks.length && !dragging && <p style={{ fontSize: 12, color: AU.inkFaint, textAlign: "center", padding: 24, fontStyle: "italic" }}>Nenhuma tarefa</p>}
+        {!tasks.length && !dragging && <p style={{ fontSize: 12, color: theme.inkFaint, textAlign: "center", padding: 24, fontStyle: "italic" }}>Nenhuma tarefa</p>}
         {hidden > 0 && <button onClick={() => setShowAll(true)} style={{ ...btnG, fontSize: 10, padding: "5px 0", textAlign: "center", width: "100%", border: "1px dashed #cbd5e1" }}>+ {hidden} anterior{hidden > 1 ? "es" : ""}</button>}
         {isDone && showAll && sorted.length > 5 && <button onClick={() => setShowAll(false)} style={{ ...btnG, fontSize: 10, padding: "5px 0", textAlign: "center", width: "100%", border: "1px dashed #cbd5e1" }}>Mostrar menos</button>}
       </div>
@@ -2159,30 +2230,32 @@ function App() {
       )}
 
       {/* ── Header desktop ── */}
-      <header className="desktop-only" style={{ background: SCOPE_THEME[scope].headerBg, color: AU.ink, padding: "12px 22px", alignItems: "center", gap: 18, flexWrap: "wrap", borderTop: `4px solid ${SCOPE_BAR[scope]}`, borderBottom: `1px solid ${SCOPE_THEME[scope].hair}` }}>
-        <span style={{ fontFamily: "Fraunces, serif", fontSize: 26, fontWeight: 600, fontStyle: "italic", letterSpacing: -0.8, color: AU.ink }}>Alfredo</span>
-        <div style={{ height: 14, width: 1, background: AU.hair }} />
+      <header className="desktop-only" style={{ background: SCOPE_THEME[scope].headerBg, color: SCOPE_THEME[scope].ink, padding: "12px 22px", alignItems: "center", gap: 18, flexWrap: "wrap", borderTop: `4px solid ${SCOPE_BAR[scope]}`, borderBottom: `1px solid ${SCOPE_THEME[scope].hair}` }}>
+        <span style={{ fontFamily: "Fraunces, serif", fontSize: 26, fontWeight: 600, fontStyle: "italic", letterSpacing: -0.8, color: SCOPE_ACCENT[scope] }}>Alfredo</span>
+        <div style={{ height: 14, width: 1, background: SCOPE_THEME[scope].hair }} />
         <div style={{ display: "flex", gap: 18, fontFamily: "Manrope, sans-serif", fontSize: 17, fontWeight: 500 }}>
           <span style={{ color: SCOPE_ACCENT[scope] }}>
             <strong style={{ fontWeight: 700 }}>{activeN}</strong>
             <span style={{ opacity: 0.8, marginLeft: 5 }}>ativa{activeN !== 1 ? "s" : ""}</span>
           </span>
-          <span style={{ color: COL_ACCENT["Em andamento"] }}>
+          <span style={{ color: getColAccent(scope)["Em andamento"] }}>
             <strong style={{ fontWeight: 700 }}>{doingN}</strong>
             <span style={{ opacity: 0.8, marginLeft: 5 }}>em andamento</span>
           </span>
-          <span style={{ color: COL_ACCENT.Concluído }}>
+          <span style={{ color: getColAccent(scope).Concluído }}>
             <strong style={{ fontWeight: 700 }}>{doneToday}</strong>
             <span style={{ opacity: 0.8, marginLeft: 5 }}>concluída{doneToday !== 1 ? "s" : ""} hoje</span>
           </span>
         </div>
-        {/* Toggle Trabalho / Pessoal — pílulas coloridas por scope */}
+        {/* Toggle Trabalho / Pessoal — pílulas coloridas por scope.
+            Pessoal usa estilo B do mock: verde sólido com texto bege quando ativo. */}
         <div style={{ display: "flex", gap: 6 }}>
           {["trabalho", "pessoal"].map(s => {
             const active = scope === s;
             const isWork = s === "trabalho";
-            const activeBg   = isWork ? "#1B3358" : "#3A2A1F";
-            const activeBd   = isWork ? "#2A4A75" : "#54402F";
+            const activeBg   = isWork ? "#1B3358" : "#174D38";
+            const activeFg   = isWork ? SCOPE_THEME.trabalho.ink : "#EDE4D2";
+            const idleFg     = SCOPE_THEME[scope].inkLow;
             const icon       = isWork ? "🧳" : "🏠";
             const label      = isWork ? "Trabalho" : "Pessoal";
             return (
@@ -2191,7 +2264,7 @@ function App() {
                 padding: "6px 14px", borderRadius: 8,
                 border: "none",
                 background: active ? activeBg : "transparent",
-                color: active ? AU.ink : AU.inkLow,
+                color: active ? activeFg : idleFg,
                 fontWeight: active ? 700 : 500,
                 fontSize: 12.5, fontFamily: "inherit", cursor: "pointer",
                 transition: "all 0.15s", letterSpacing: 0.1,
@@ -2203,14 +2276,14 @@ function App() {
           })}
         </div>
         {/* Botão Glossário */}
-        <button onClick={() => openGlossaryWithPrefill(null)} title="Glossário" style={{ padding: "5px 11px", borderRadius: 6, border: `1px solid ${AU.hair}`, background: "transparent", color: AU.inkMid, fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+        <button onClick={() => openGlossaryWithPrefill(null)} title="Glossário" style={{ padding: "5px 11px", borderRadius: 6, border: `1px solid ${SCOPE_THEME[scope].hair}`, background: "transparent", color: SCOPE_THEME[scope].inkMid, fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
           <span>📖</span><span style={{ fontWeight: 600 }}>Glossário</span>
         </button>
         {/* Botão Lista de Compras (Fase 6) */}
         <button
           onClick={() => setShowShopping(true)}
           title="Lista de Compras"
-          style={{ position: "relative", padding: "5px 11px", borderRadius: 6, border: `1px solid ${showShopping ? "#d97706" : AU.hair}`, background: showShopping ? "#d9770618" : "transparent", color: showShopping ? "#d97706" : AU.inkMid, fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}
+          style={{ position: "relative", padding: "5px 11px", borderRadius: 6, border: `1px solid ${showShopping ? "#d97706" : SCOPE_THEME[scope].hair}`, background: showShopping ? "#d9770618" : "transparent", color: showShopping ? "#d97706" : SCOPE_THEME[scope].inkMid, fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}
         >
           <span>🛒</span>
           <span style={{ fontWeight: 600 }}>Compras</span>
@@ -2223,40 +2296,41 @@ function App() {
           <button
             onClick={() => setShowSilenced(s => !s)}
             title={showSilenced ? "Ocultar tags silenciadas no kanban" : "Mostrar silenciadas temporariamente"}
-            style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${showSilenced ? "#8B5CF6" : AU.hair}`, background: showSilenced ? "#8B5CF618" : "transparent", color: showSilenced ? "#8B5CF6" : AU.inkFaint, fontSize: 10.5, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontWeight: showSilenced ? 700 : 500 }}
+            style={{ padding: "5px 10px", borderRadius: 6, border: `1px solid ${showSilenced ? getColAccent(scope).Aguardando : SCOPE_THEME[scope].hair}`, background: showSilenced ? statusBgByScope(getColAccent(scope).Aguardando, scope) : "transparent", color: showSilenced ? getColAccent(scope).Aguardando : SCOPE_THEME[scope].inkFaint, fontSize: 10.5, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontWeight: showSilenced ? 700 : 500 }}
           >{showSilenced ? "👁 Silenciadas visíveis" : "👁 Ver silenciadas"}</button>
         )}
-        <SearchInput value={search} onChange={setSearch} count={searchResultCount} mobile={false} />
-        <AddForm onAdd={handleAdd} busy={processing === "new"} />
+        <SearchInput value={search} onChange={setSearch} count={searchResultCount} mobile={false} scope={scope} />
+        <AddForm onAdd={handleAdd} busy={processing === "new"} scope={scope} />
         <div style={{ flex: 1 }} />
         {!searchDebounced && collapsedCols.filter(c => COLLAPSIBLE_COLS.includes(c)).map(c => {
           const idx = COLUMNS.indexOf(c);
           const count = idx >= 0 ? tasks.filter(t => t.column === c).length : 0;
-          return <CollapsiblePill key={c} name={c} count={count} onExpand={() => toggleCol(c)} />;
+          return <CollapsiblePill key={c} name={c} count={count} onExpand={() => toggleCol(c)} scope={scope} />;
         })}
-        <button onClick={fetchTasks} title="Recarregar do Notion" style={{ padding: "5px 11px", borderRadius: 6, border: `1px solid ${AU.hair}`, background: "transparent", color: AU.inkMid, fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+        <button onClick={fetchTasks} title="Recarregar do Notion" style={{ padding: "5px 11px", borderRadius: 6, border: `1px solid ${SCOPE_THEME[scope].hair}`, background: "transparent", color: SCOPE_THEME[scope].inkMid, fontSize: 11, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
           <span>🔄</span><span style={{ fontWeight: 600 }}>Recarregar</span>
         </button>
       </header>
 
       {/* ── Header mobile ── */}
-      <header className="mobile-only" style={{ background: SCOPE_THEME[scope].headerBg, color: AU.ink, padding: "10px 14px", alignItems: "center", gap: 10, borderTop: `4px solid ${SCOPE_BAR[scope]}`, borderBottom: `1px solid ${SCOPE_THEME[scope].hair}`, flexDirection: "column" }}>
+      <header className="mobile-only" style={{ background: SCOPE_THEME[scope].headerBg, color: SCOPE_THEME[scope].ink, padding: "10px 14px", alignItems: "center", gap: 10, borderTop: `4px solid ${SCOPE_BAR[scope]}`, borderBottom: `1px solid ${SCOPE_THEME[scope].hair}`, flexDirection: "column" }}>
         <div style={{ display: "flex", width: "100%", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: "Fraunces, serif", fontSize: 22, fontWeight: 600, fontStyle: "italic", letterSpacing: -0.6, color: AU.ink }}>Alfredo</span>
+          <span style={{ fontFamily: "Fraunces, serif", fontSize: 22, fontWeight: 600, fontStyle: "italic", letterSpacing: -0.6, color: SCOPE_ACCENT[scope] }}>Alfredo</span>
           {/* Toggle mobile — pílulas coloridas por scope */}
           <div style={{ display: "flex", gap: 4 }}>
             {["trabalho", "pessoal"].map(s => {
               const active = scope === s;
               const isWork = s === "trabalho";
-              const activeBg = isWork ? "#1B3358" : "#3A2A1F";
-              const activeBd = isWork ? "#2A4A75" : "#54402F";
+              const activeBg = isWork ? "#1B3358" : "#174D38";
+              const activeFg = isWork ? SCOPE_THEME.trabalho.ink : "#EDE4D2";
+              const idleFg   = SCOPE_THEME[scope].inkLow;
               const icon = isWork ? "🧳" : "🏠";
               return (
                 <button key={s} onClick={() => switchScope(s)} title={isWork ? "Trabalho" : "Pessoal"} style={{
                   padding: "4px 9px", borderRadius: 6,
                   border: "none",
                   background: active ? activeBg : "transparent",
-                  color: active ? AU.ink : AU.inkLow,
+                  color: active ? activeFg : idleFg,
                   fontSize: 13, fontFamily: "inherit", cursor: "pointer", lineHeight: 1,
                 }}>{icon}</button>
               );
@@ -2266,10 +2340,10 @@ function App() {
             <select
               value={mobileCol}
               onChange={e => setMobileCol(Number(e.target.value))}
-              style={{ width: "100%", background: AU.surface, color: AU.ink, border: `1px solid ${AU.hair}`, borderRadius: 6, padding: "5px 8px", fontSize: 13, fontFamily: "inherit", fontWeight: 600 }}
+              style={{ width: "100%", background: SCOPE_THEME[scope].cardBg, color: SCOPE_THEME[scope].ink, border: `1px solid ${SCOPE_THEME[scope].hair}`, borderRadius: 6, padding: "5px 8px", fontSize: 13, fontFamily: "inherit", fontWeight: 600 }}
             >
               {COLUMNS.map((col, i) => (
-                <option key={col} value={i} style={{ background: AU.surface, color: AU.ink }}>
+                <option key={col} value={i} style={{ background: SCOPE_THEME[scope].cardBg, color: SCOPE_THEME[scope].ink }}>
                   {col} ({tasks.filter(t => t.column === col).length})
                 </option>
               ))}
@@ -2277,25 +2351,25 @@ function App() {
           </div>
           <button
             onClick={() => { setShowMobileSearch(s => !s); if (showMobileSearch) setSearch(""); }}
-            style={{ border: "none", background: search ? statusBg(COL_ACCENT["A fazer"]) : "transparent", color: search ? COL_ACCENT["A fazer"] : AU.inkMid, fontSize: 18, padding: "2px 6px", lineHeight: 1, cursor: "pointer", borderRadius: 6 }}
+            style={{ border: "none", background: search ? statusBgByScope(getColAccent(scope)["A fazer"], scope) : "transparent", color: search ? getColAccent(scope)["A fazer"] : SCOPE_THEME[scope].inkMid, fontSize: 18, padding: "2px 6px", lineHeight: 1, cursor: "pointer", borderRadius: 6 }}
             title="Buscar"
           >🔍</button>
-          <button onClick={() => openGlossaryWithPrefill(null)} title="Glossário" style={{ border: "none", background: "transparent", color: AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>📖</button>
+          <button onClick={() => openGlossaryWithPrefill(null)} title="Glossário" style={{ border: "none", background: "transparent", color: SCOPE_THEME[scope].inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>📖</button>
           <button
             onClick={() => setShowShopping(true)}
             title="Lista de Compras"
-            style={{ position: "relative", border: "none", background: "transparent", color: silencedCount > 0 ? "#d97706" : AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}
+            style={{ position: "relative", border: "none", background: "transparent", color: silencedCount > 0 ? "#d97706" : SCOPE_THEME[scope].inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}
           >
             🛒
             {silencedCount > 0 && (
               <span style={{ position: "absolute", top: -2, right: -2, background: "#d97706", color: "#fff", borderRadius: 999, fontSize: 8, fontWeight: 800, padding: "1px 4px", lineHeight: 1.4, minWidth: 14, textAlign: "center" }}>{silencedCount}</span>
             )}
           </button>
-          <button onClick={fetchTasks} style={{ border: "none", background: "transparent", color: AU.inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>🔄</button>
+          <button onClick={fetchTasks} style={{ border: "none", background: "transparent", color: SCOPE_THEME[scope].inkMid, fontSize: 18, padding: "2px 4px", lineHeight: 1, cursor: "pointer" }}>🔄</button>
         </div>
         {showMobileSearch && (
           <div style={{ width: "100%", paddingBottom: 2 }}>
-            <SearchInput value={search} onChange={setSearch} count={searchResultCount} mobile={true} />
+            <SearchInput value={search} onChange={setSearch} count={searchResultCount} mobile={true} scope={scope} />
           </div>
         )}
       </header>
@@ -2304,8 +2378,8 @@ function App() {
       <div className="desktop-only" style={{ padding: "16px 20px", flexDirection: "column", background: SCOPE_BG[scope], minHeight: "calc(100vh - 42px)" }}>
         <Banner status={banner} onDismiss={() => setBanner(null)} />
         {searchDebounced && filteredTasks.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: AU.inkLow, fontSize: 14 }}>
-            Nenhuma task encontrada para <strong style={{ color: AU.ink }}>"{searchDebounced}"</strong>
+          <div style={{ textAlign: "center", padding: "60px 20px", color: SCOPE_THEME[scope].inkLow, fontSize: 14 }}>
+            Nenhuma task encontrada para <strong style={{ color: SCOPE_THEME[scope].ink }}>"{searchDebounced}"</strong>
           </div>
         ) : (
           <div style={{ display: "flex", gap: 10 }}>
