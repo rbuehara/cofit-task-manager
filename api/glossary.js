@@ -3,7 +3,7 @@
 
 const requireAuth = require("./_auth");
 const { notionHeaders } = require("./_notion");
-const { getGlossary, fetchAll, invalidateCache } = require("./_glossary");
+const { getGlossary, fetchAll, invalidateCache, CORES_VALIDAS } = require("./_glossary");
 
 export default async function handler(req, res) {
   if (!requireAuth(req, res)) return;
@@ -35,28 +35,39 @@ export default async function handler(req, res) {
 
   // ── POST ─────────────────────────────────────────────────────────────────
   if (req.method === "POST") {
-    const { sigla, significado, escopo } = req.body || {};
+    const { sigla, significado, escopo, cor } = req.body || {};
     if (!sigla || !significado || !escopo) {
       return res.status(400).json({ error: "sigla, significado e escopo são obrigatórios" });
     }
     if (!["Trabalho", "Pessoal", "Ambos"].includes(escopo)) {
       return res.status(400).json({ error: "escopo deve ser Trabalho, Pessoal ou Ambos" });
     }
+    // cor é opcional; se vier, valida contra a paleta
+    let corNorm = null;
+    if (cor !== undefined && cor !== null && cor !== "") {
+      corNorm = String(cor).toLowerCase();
+      if (!CORES_VALIDAS.includes(corNorm)) {
+        return res.status(400).json({ error: `cor inválida. Use uma de: ${CORES_VALIDAS.join(", ")}` });
+      }
+    }
 
     const dbId = process.env.NOTION_DATABASE_ID_GLOSSARIO;
     if (!dbId) return res.status(500).json({ error: "NOTION_DATABASE_ID_GLOSSARIO não configurado" });
 
     try {
+      const props = {
+        Sigla: { title: [{ text: { content: sigla } }] },
+        Significado: { rich_text: [{ text: { content: significado } }] },
+        Escopo: { select: { name: escopo } },
+      };
+      if (corNorm) props.Cor = { select: { name: corNorm } };
+
       const r = await fetch("https://api.notion.com/v1/pages", {
         method: "POST",
         headers: notionHeaders(),
         body: JSON.stringify({
           parent: { database_id: dbId },
-          properties: {
-            Sigla: { title: [{ text: { content: sigla } }] },
-            Significado: { rich_text: [{ text: { content: significado } }] },
-            Escopo: { select: { name: escopo } },
-          },
+          properties: props,
         }),
       });
 
@@ -76,6 +87,7 @@ export default async function handler(req, res) {
         sigla,
         significado,
         escopo,
+        cor: corNorm,
       });
     } catch (e) {
       console.error("glossary POST error:", e);

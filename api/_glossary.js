@@ -17,10 +17,17 @@ const CONTEXTOS = {
 // Adicionar entradas reais via database Notion — não editar aqui.
 
 const FALLBACK_GLOSSARIO = [
-  { sigla: "COFIT", significado: "Coordenadoria de Fiscalização do IPVA e do ITCD" },
-  { sigla: "SAT", significado: "Superintendência de Administração Tributária" },
-  { sigla: "IPVA", significado: "Imposto sobre a Propriedade de Veículos Automotores" },
-  { sigla: "ITCD", significado: "Imposto sobre Transmissão Causa Mortis e Doação" },
+  { sigla: "COFIT", significado: "Coordenadoria de Fiscalização do IPVA e do ITCD", cor: null },
+  { sigla: "SAT", significado: "Superintendência de Administração Tributária", cor: null },
+  { sigla: "IPVA", significado: "Imposto sobre a Propriedade de Veículos Automotores", cor: null },
+  { sigla: "ITCD", significado: "Imposto sobre Transmissão Causa Mortis e Doação", cor: null },
+];
+
+// Cores válidas para a propriedade Cor do glossário (Notion Select).
+// Mantidas alinhadas à paleta usada pelo front (TAG_COLORS).
+const CORES_VALIDAS = [
+  "verde", "vermelho", "azul", "roxo", "marrom",
+  "amarelo", "laranja", "rosa", "cinza",
 ];
 
 // ─── Cache em memória ─────────────────────────────────────────────────────────
@@ -78,7 +85,10 @@ async function fetchFromNotion(scope) {
     const sigla = p["Sigla"]?.title?.[0]?.plain_text || "";
     const significado = p["Significado"]?.rich_text?.[0]?.plain_text || "";
     const escopo = p["Escopo"]?.select?.name || "Trabalho";
-    return { id: page.id, sigla, significado, escopo };
+    // Cor é Select opcional; normaliza para minúsculas
+    const corRaw = p["Cor"]?.select?.name || null;
+    const cor = corRaw ? String(corRaw).toLowerCase() : null;
+    return { id: page.id, sigla, significado, escopo, cor };
   });
 }
 
@@ -114,7 +124,7 @@ async function fetchAll() {
   const entries = await fetchFromNotion("all");
   if (entries === null) {
     // fallback: retorna as hardcoded com id=null
-    return FALLBACK_GLOSSARIO.map(e => ({ ...e, id: null, escopo: "Trabalho" }));
+    return FALLBACK_GLOSSARIO.map(e => ({ ...e, id: null, escopo: "Trabalho", cor: null }));
   }
   return entries;
 }
@@ -127,4 +137,4 @@ function invalidateCache(scope) {
   }
 }
 
-module.exports = { getGlossary, fetchAll, invalidateCache };
+module.exports = { getGlossary, fetchAll, invalidateCache, CORES_VALIDAS };

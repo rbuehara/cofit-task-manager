@@ -3,7 +3,7 @@
 
 const requireAuth = require("../_auth");
 const { notionHeaders } = require("../_notion");
-const { invalidateCache } = require("../_glossary");
+const { invalidateCache, CORES_VALIDAS } = require("../_glossary");
 
 export default async function handler(req, res) {
   if (!requireAuth(req, res)) return;
@@ -13,16 +13,33 @@ export default async function handler(req, res) {
 
   // ── PATCH ─────────────────────────────────────────────────────────────────
   if (req.method === "PATCH") {
-    const { sigla, significado, escopo } = req.body || {};
+    const { sigla, significado, escopo, cor } = req.body || {};
 
     if (escopo && !["Trabalho", "Pessoal", "Ambos"].includes(escopo)) {
       return res.status(400).json({ error: "escopo deve ser Trabalho, Pessoal ou Ambos" });
+    }
+
+    // cor: undefined = não mexer; null/"" = limpar; string válida = setar
+    let corOp = "skip";
+    let corNorm = null;
+    if (cor !== undefined) {
+      if (cor === null || cor === "") {
+        corOp = "clear";
+      } else {
+        corNorm = String(cor).toLowerCase();
+        if (!CORES_VALIDAS.includes(corNorm)) {
+          return res.status(400).json({ error: `cor inválida. Use uma de: ${CORES_VALIDAS.join(", ")}` });
+        }
+        corOp = "set";
+      }
     }
 
     const props = {};
     if (sigla !== undefined)      props["Sigla"]      = { title:     [{ text: { content: sigla } }] };
     if (significado !== undefined) props["Significado"] = { rich_text: [{ text: { content: significado } }] };
     if (escopo !== undefined)      props["Escopo"]     = { select: { name: escopo } };
+    if (corOp === "set")           props["Cor"]        = { select: { name: corNorm } };
+    if (corOp === "clear")         props["Cor"]        = { select: null };
 
     try {
       const r = await fetch(`https://api.notion.com/v1/pages/${id}`, {

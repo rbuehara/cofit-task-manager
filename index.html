@@ -295,17 +295,60 @@ const AU = {
 const INBOX_STALE_DAYS = 5;          // cards no Inbox mais antigos que isso recebem alerta visual
 const INBOX_STALE_COLOR = "#F59E0B"; // âmbar Aurora — borda esquerda + badge + linha no expandido
 
-const TAG_COLORS = {
-  ITCD: { bg: "#dbeddb", text: "#1a7a2e", border: "#b8dbb8" },
-  IPVA: { bg: "#d3e5ef", text: "#24548d", border: "#a8cee0" },
-  "Gestão de equipe": { bg: "#e8deee", text: "#6b3fa0", border: "#d4bfe0" },
-  Administrativo: { bg: "#fadec9", text: "#9a6700", border: "#f0c9a0" },
-  Institucional: { bg: "#ffe2dd", text: "#c4554d", border: "#f5c4bf" },
-  "Sistemas/TI": { bg: "#fdecc8", text: "#9b6a12", border: "#f0d8a0" },
-  Outro: { bg: "#e3e2e0", text: "#55534e", border: "#d0cfcc" },
+/* ── Paleta nomeada (usada pelo glossário e pelo fallback hash) ── */
+const TAG_PALETTE = {
+  verde:    { bg: "#dbeddb", text: "#1a7a2e", border: "#b8dbb8" },
+  azul:     { bg: "#d3e5ef", text: "#24548d", border: "#a8cee0" },
+  roxo:     { bg: "#e8deee", text: "#6b3fa0", border: "#d4bfe0" },
+  laranja:  { bg: "#fadec9", text: "#9a6700", border: "#f0c9a0" },
+  vermelho: { bg: "#ffe2dd", text: "#c4554d", border: "#f5c4bf" },
+  amarelo:  { bg: "#fdecc8", text: "#9b6a12", border: "#f0d8a0" },
+  marrom:   { bg: "#eaddd0", text: "#7a4f1d", border: "#d6c0a3" },
+  rosa:     { bg: "#fce4ec", text: "#a83279", border: "#f5c0d4" },
+  cinza:    { bg: "#e3e2e0", text: "#55534e", border: "#d0cfcc" },
 };
-const DEFAULT_TAG_COLOR = { bg: "#e8e8ff", text: "#5b5fc7", border: "#c8c8f0" };
-const getTagColor = (tag) => TAG_COLORS[tag] || DEFAULT_TAG_COLOR;
+const HASH_PALETTE_ORDER = ["verde", "azul", "roxo", "laranja", "vermelho", "amarelo", "marrom", "rosa", "cinza"];
+
+/* ── Cores legadas hard-coded (mantidas para Trabalho enquanto o glossário não cobrir tudo) ── */
+const TAG_COLORS = {
+  ITCD: TAG_PALETTE.verde,
+  IPVA: TAG_PALETTE.azul,
+  "Gestão de equipe": TAG_PALETTE.roxo,
+  Administrativo: TAG_PALETTE.laranja,
+  Institucional: TAG_PALETTE.vermelho,
+  "Sistemas/TI": TAG_PALETTE.amarelo,
+  Outro: TAG_PALETTE.cinza,
+};
+
+/* ── Mapa dinâmico tag→cor vindo do glossário (atualizado em runtime) ── */
+const glossaryColorMap = {}; // chave: tag.toLowerCase() → nome de cor (ex: "verde")
+function setGlossaryColorMap(entries) {
+  for (const k of Object.keys(glossaryColorMap)) delete glossaryColorMap[k];
+  (entries || []).forEach(e => {
+    if (e && e.sigla && e.cor && TAG_PALETTE[e.cor]) {
+      glossaryColorMap[e.sigla.toLowerCase()] = e.cor;
+    }
+  });
+}
+
+/* ── Hash determinístico para fallback ── */
+function hashTag(tag) {
+  let h = 0;
+  const s = String(tag || "").toLowerCase();
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+const getTagColor = (tag) => {
+  // 1) Glossário (fonte de verdade do scope ativo)
+  const fromGloss = glossaryColorMap[String(tag || "").toLowerCase()];
+  if (fromGloss && TAG_PALETTE[fromGloss]) return TAG_PALETTE[fromGloss];
+  // 2) Mapa legado hard-coded (Trabalho)
+  if (TAG_COLORS[tag]) return TAG_COLORS[tag];
+  // 3) Fallback determinístico por hash
+  const idx = hashTag(tag) % HASH_PALETTE_ORDER.length;
+  return TAG_PALETTE[HASH_PALETTE_ORDER[idx]];
+};
 
 /* ── Search helpers ── */
 const norm = (s) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -710,6 +753,44 @@ function ShoppingListModal({ scope, tasks, onComplete, onAdd, onDelete, silentTa
   );
 }
 
+/* ── Helpers visuais para Cor da tag (Fase 8) ─────────────────────────────── */
+/* Select com swatch de cor — "" = automática (hash). */
+function ColorSelect({ value, onChange }) {
+  const opts = ["", ...HASH_PALETTE_ORDER];
+  const cur = value && TAG_PALETTE[value];
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: 3, background: cur ? cur.bg : "#f1f5f9", border: `1px solid ${cur ? cur.border : "#cbd5e1"}`, flexShrink: 0 }} />
+      <select value={value || ""} onChange={e => onChange(e.target.value)} style={{ ...inp, width: 100, fontSize: 11, padding: "4px 5px" }} title="Cor da tag (vazio = automática por hash)">
+        <option value="">auto</option>
+        {HASH_PALETTE_ORDER.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+    </span>
+  );
+}
+
+/* Badge de cor para visualização na tabela. Mostra o swatch + nome (ou "auto" entre parênteses se sem cor). */
+function ColorBadge({ cor, sigla }) {
+  if (cor && TAG_PALETTE[cor]) {
+    const c = TAG_PALETTE[cor];
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "#475569" }}>
+        <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 3, background: c.bg, border: `1px solid ${c.border}` }} />
+        {cor}
+      </span>
+    );
+  }
+  // sem cor configurada → mostra preview do hash
+  const idx = hashTag(sigla) % HASH_PALETTE_ORDER.length;
+  const c = TAG_PALETTE[HASH_PALETTE_ORDER[idx]];
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>
+      <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 3, background: c.bg, border: `1px solid ${c.border}`, opacity: 0.7 }} />
+      auto
+    </span>
+  );
+}
+
 /* ── GlossaryModal ─────────────────────────────────────────────────────────── */
 /* CRUD do glossário. prefillSigla: abre com Sigla pré-preenchida (atalho inline). */
 function GlossaryModal({ scope, onClose, prefillSigla }) {
@@ -720,6 +801,7 @@ function GlossaryModal({ scope, onClose, prefillSigla }) {
   const [editSigla, setEditSigla] = useState("");
   const [editSignif, setEditSignif] = useState("");
   const [editEscopo, setEditEscopo] = useState(scope === "pessoal" ? "Pessoal" : "Trabalho");
+  const [editCor, setEditCor] = useState(""); // "" = sem cor (auto/hash); senão nome da paleta
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const significadoRef = useRef(null);
@@ -745,6 +827,7 @@ function GlossaryModal({ scope, onClose, prefillSigla }) {
       setEditSigla(prefillSigla);
       setEditSignif("");
       setEditEscopo(scope === "pessoal" ? "Pessoal" : "Trabalho");
+      setEditCor("");
       setTimeout(() => significadoRef.current?.focus(), 80);
     }
   }, [prefillSigla]);
@@ -759,6 +842,7 @@ function GlossaryModal({ scope, onClose, prefillSigla }) {
     setEditSigla("");
     setEditSignif("");
     setEditEscopo(scope === "pessoal" ? "Pessoal" : "Trabalho");
+    setEditCor("");
     setTimeout(() => significadoRef.current?.focus(), 80);
   }
 
@@ -767,6 +851,7 @@ function GlossaryModal({ scope, onClose, prefillSigla }) {
     setEditSigla(entry.sigla);
     setEditSignif(entry.significado);
     setEditEscopo(entry.escopo);
+    setEditCor(entry.cor || "");
   }
 
   function cancelEdit() {
@@ -777,11 +862,12 @@ function GlossaryModal({ scope, onClose, prefillSigla }) {
     if (!editSigla.trim() || !editSignif.trim()) return;
     setSaving(true);
     try {
+      const corPayload = editCor || null; // null = limpar/sem cor; string = setar
       if (editingId === "new") {
-        await api("/api/glossary", { method: "POST", body: { sigla: editSigla.trim(), significado: editSignif.trim(), escopo: editEscopo } });
+        await api("/api/glossary", { method: "POST", body: { sigla: editSigla.trim(), significado: editSignif.trim(), escopo: editEscopo, cor: corPayload } });
         showToast(`"${editSigla.trim()}" adicionado ao glossário.`);
       } else {
-        await api(`/api/glossary/${editingId}`, { method: "PATCH", body: { sigla: editSigla.trim(), significado: editSignif.trim(), escopo: editEscopo } });
+        await api(`/api/glossary/${editingId}`, { method: "PATCH", body: { sigla: editSigla.trim(), significado: editSignif.trim(), escopo: editEscopo, cor: corPayload } });
         showToast(`"${editSigla.trim()}" atualizado.`);
       }
       setEditingId(null);
@@ -845,6 +931,7 @@ function GlossaryModal({ scope, onClose, prefillSigla }) {
                   <th style={{ textAlign: "left", padding: "6px 8px", color: "#475569", fontWeight: 700, width: 120 }}>Sigla</th>
                   <th style={{ textAlign: "left", padding: "6px 8px", color: "#475569", fontWeight: 700 }}>Significado</th>
                   <th style={{ textAlign: "left", padding: "6px 8px", color: "#475569", fontWeight: 700, width: 80 }}>Escopo</th>
+                  <th style={{ textAlign: "left", padding: "6px 8px", color: "#475569", fontWeight: 700, width: 96 }}>Cor</th>
                   <th style={{ width: 64 }}></th>
                 </tr>
               </thead>
@@ -858,6 +945,9 @@ function GlossaryModal({ scope, onClose, prefillSigla }) {
                         <select value={editEscopo} onChange={e => setEditEscopo(e.target.value)} style={{ ...inp, fontSize: 11, padding: "4px 5px" }}>
                           {escopoOptions.map(o => <option key={o} value={o}>{o}</option>)}
                         </select>
+                      </td>
+                      <td style={{ padding: "6px 8px" }}>
+                        <ColorSelect value={editCor} onChange={setEditCor} />
                       </td>
                       <td style={{ padding: "6px 4px", whiteSpace: "nowrap" }}>
                         <button onClick={saveEntry} disabled={saving} style={{ ...btnP, padding: "3px 9px", fontSize: 11, marginRight: 3 }}>✓</button>
@@ -875,6 +965,9 @@ function GlossaryModal({ scope, onClose, prefillSigla }) {
                           {entry.escopo}
                         </span>
                       </td>
+                      <td style={{ padding: "7px 8px" }}>
+                        <ColorBadge cor={entry.cor} sigla={entry.sigla} />
+                      </td>
                       <td style={{ padding: "7px 4px", whiteSpace: "nowrap" }}>
                         <button onClick={() => startEdit(entry)} title="Editar" style={{ ...btnS, marginRight: 3, padding: "2px 7px" }}>✎</button>
                         <button onClick={() => deleteEntry(entry)} title="Arquivar" style={{ ...btnS, color: "#ef4444", padding: "2px 7px" }}>🗑</button>
@@ -883,7 +976,7 @@ function GlossaryModal({ scope, onClose, prefillSigla }) {
                   )
                 ))}
                 {filtered.length === 0 && !loading && (
-                  <tr><td colSpan={4} style={{ padding: "20px 8px", textAlign: "center", color: "#94a3b8", fontSize: 12 }}>Nenhuma entrada para este filtro.</td></tr>
+                  <tr><td colSpan={5} style={{ padding: "20px 8px", textAlign: "center", color: "#94a3b8", fontSize: 12 }}>Nenhuma entrada para este filtro.</td></tr>
                 )}
               </tbody>
             </table>
@@ -899,6 +992,7 @@ function GlossaryModal({ scope, onClose, prefillSigla }) {
               <select value={editEscopo} onChange={e => setEditEscopo(e.target.value)} style={{ ...inp, width: 100, fontSize: 11, padding: "5px 5px" }}>
                 {escopoOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
+              <ColorSelect value={editCor} onChange={setEditCor} />
               <button onClick={saveEntry} disabled={saving || !editSigla.trim() || !editSignif.trim()} style={{ ...btnP, padding: "6px 14px", fontSize: 12, opacity: (!editSigla.trim() || !editSignif.trim()) ? 0.4 : 1 }}>Salvar</button>
               <button onClick={cancelEdit} style={{ ...btnG, padding: "6px 10px", fontSize: 12 }}>Cancelar</button>
             </div>
@@ -1731,6 +1825,7 @@ function App() {
   const [dragging, setDragging] = useState(null); // { id, sourceCol }
   const [dropTarget, setDropTarget] = useState(null); // { col, index }
   const [recentCompleted, setRecentCompleted] = useState([]); // cache local das concluídas recentes (Fase 4)
+  const [glossaryVersion, setGlossaryVersion] = useState(0); // bump para re-render quando cores mudam (Fase 8)
   const allTags = [...new Set(tasks.flatMap(t => t.tags || []))];
 
   function toggleCol(name) {
@@ -1744,9 +1839,22 @@ function App() {
   useEffect(() => {
     fetchTasks();
     fetchRecentCompleted();
+    fetchGlossaryColors();
     setSilentTagsState(loadSilentTags(scope));
     setShowSilenced(false);
   }, [scope]);
+
+  // Carrega entradas do glossário do scope atual para popular cores das tags (Fase 8)
+  async function fetchGlossaryColors() {
+    try {
+      const r = await api(`/api/glossary?scope=${scope}`);
+      setGlossaryColorMap(r.glossario || []);
+      setGlossaryVersion(v => v + 1);
+    } catch (e) {
+      // não derruba o app: cores caem no fallback hash/legado
+      console.warn("glossary colors fetch failed:", e?.message || e);
+    }
+  }
 
   // Atualiza título da aba e cor de fundo sutil conforme scope
   useEffect(() => {
@@ -2205,7 +2313,7 @@ function App() {
         <GlossaryModal
           scope={scope}
           prefillSigla={glossaryPrefill}
-          onClose={() => { setShowGlossary(false); setGlossaryPrefill(null); }}
+          onClose={() => { setShowGlossary(false); setGlossaryPrefill(null); fetchGlossaryColors(); }}
         />
       )}
 
