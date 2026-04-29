@@ -1359,6 +1359,13 @@ function TaskCard({ task, colIndex, onMove, onEdit, onDelete, onImprove, onReord
             >{task.description}</p>
           )}
 
+          {/* Tags — card expandido */}
+          {(task.tags || []).length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
+              {(task.tags || []).map(t => <TagChip key={t} tag={t} />)}
+            </div>
+          )}
+
           {/* Aguardando: linha com ↳ em ink-mid (sem emoji ⏸) */}
           {task.aguardando && (
             <p style={{
