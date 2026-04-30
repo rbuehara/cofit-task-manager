@@ -188,8 +188,10 @@ export default async function handler(req, res) {
       const scope = task.scope || "trabalho";
       const dbId = databaseId(scope);
 
-      // Normaliza polish para boolean — iOS Shortcuts pode enviar string "true"
-      const doPolish = task.polish === true || task.polish === "true";
+      // Normaliza polish para boolean — iOS Shortcuts serializa booleans como string
+      // localizada: "true" (en), "Verdadeiro" (pt-BR), "verdadeiro" (variação).
+      const polishRaw = String(task.polish ?? "").toLowerCase().trim();
+      const doPolish = polishRaw === "true" || polishRaw === "verdadeiro" || task.polish === true;
 
       // Polish opcional (acionado por atalho iOS via "polish": true).
       // Modo "light" — sem activeTasksByTag/recentCompleted para manter latência baixa.
