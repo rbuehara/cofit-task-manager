@@ -1,5 +1,10 @@
 const requireAuth = require("./_auth");
 
+// Campo Grande/MS — UTC-4 fixo (sem horário de verão desde 2019)
+function todayBRT() {
+  return new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().split("T")[0];
+}
+
 export default async function handler(req, res) {
   if (!requireAuth(req, res)) return;
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -17,7 +22,7 @@ export default async function handler(req, res) {
 
     if (!tasks?.length) return res.status(400).json({ error: "No tasks to prioritize" });
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayBRT();
     const system = `Priorize tarefas (1=mais urgente, sem repetição). Critérios: prazo, datas no texto (hoje: ${today}), aging, bloqueio, consequência, momentum (Em andamento=peso extra), estratégia.
 Perfil: ${profile?.role || "?"} | ${profile?.areas || "?"} | ${profile?.criterion || "?"}
 JSON: [{"id":"...","priority":1,"reason":"IMPACTO máx 60 chars"},...]`;

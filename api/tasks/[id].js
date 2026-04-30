@@ -1,6 +1,11 @@
 const { notionHeaders, buildProperties, parsePage } = require("../_notion");
 const requireAuth = require("../_auth");
 
+// Campo Grande/MS — UTC-4 fixo (sem horário de verão desde 2019)
+function nowBRT() {
+  return new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().replace("Z", "-04:00");
+}
+
 export default async function handler(req, res) {
   if (!requireAuth(req, res)) return;
   try {
@@ -12,7 +17,7 @@ export default async function handler(req, res) {
       // Se o PATCH altera a coluna (mudança de status), seta lastMovedAt automaticamente.
       // Reordenações dentro da mesma coluna enviam apenas { ordem } — sem "column" — e NÃO devem tocar lastMovedAt.
       if (body.column !== undefined && body.lastMovedAt === undefined) {
-        body.lastMovedAt = new Date().toISOString();
+        body.lastMovedAt = nowBRT();
       }
       const props = buildProperties(body);
 

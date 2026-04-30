@@ -2,6 +2,14 @@ const requireAuth = require("./_auth");
 const { notionHeaders, databaseId, buildProperties, parsePage } = require("./_notion");
 const { polishTask } = require("./_polish");
 
+// Helper de timezone — Campo Grande/MS usa UTC-4 fixo (sem horário de verão desde 2019).
+function nowBRT() {
+  return new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().replace("Z", "-04:00");
+}
+function todayBRT() {
+  return new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().split("T")[0];
+}
+
 export default async function handler(req, res) {
   if (!requireAuth(req, res)) return;
   try {
@@ -21,7 +29,7 @@ export default async function handler(req, res) {
         };
         if (cursor) body.start_cursor = cursor;
 
-        const today = new Date().toISOString().split("T")[0];
+        const today = todayBRT();
         body.filter = {
           or: [
             // Qualquer status que não seja Concluído nem Snooze
@@ -83,7 +91,7 @@ export default async function handler(req, res) {
       // Move tasks com Status=Snooze e Snooze até <= hoje para Inbox no topo,
       // limpa Snooze até, e renumera Ordem 1..N do Inbox. Como acontece no
       // backend, elimina race entre múltiplos clients/abas.
-      const today = new Date().toISOString().split("T")[0];
+      const today = todayBRT();
       const vencidos = tasks.filter(
         (t) => t.column === "Snooze" && t.snoozeUntil && t.snoozeUntil <= today
       );
@@ -173,10 +181,15 @@ export default async function handler(req, res) {
 
     if (req.method === "POST") {
       const task = req.body;
+      // Log completo para debug de atalho iOS (verifica tipos enviados)
+      console.log("POST /api/tasks body:", JSON.stringify(task));
       if (!task.title) return res.status(400).json({ error: "title is required" });
 
       const scope = task.scope || "trabalho";
       const dbId = databaseId(scope);
+
+      // Normaliza polish para boolean — iOS Shortcuts pode enviar string "true"
+      const doPolish = task.polish === true || task.polish === "true";
 
       // Polish opcional (acionado por atalho iOS via "polish": true).
       // Modo "light" — sem activeTasksByTag/recentCompleted para manter latência baixa.
@@ -184,8 +197,9 @@ export default async function handler(req, res) {
       let finalTitle = task.title;
       let finalDescription = task.description;
       let finalTags = task.tags || [];
+      let polishApplied = false;
 
-      if (task.polish) {
+      if (doPolish) {
         try {
           const polished = await polishTask({
             title: task.title,
@@ -197,12 +211,13 @@ export default async function handler(req, res) {
           if (polished.description) finalDescription = polished.description;
           // Merge: tags do usuário primeiro (intenção explícita), sugeridas depois, dedup.
           finalTags = [...new Set([...(task.tags || []), ...(polished.tags || [])])];
+          polishApplied = true;
         } catch (e) {
           console.error("polish opcional falhou, criando task sem polish:", e.message);
         }
       }
 
-      const now = new Date().toISOString();
+      const now = nowBRT();
       const props = buildProperties({
         ...task,
         title: finalTitle,
@@ -229,7 +244,7 @@ export default async function handler(req, res) {
       }
 
       const page = await r.json();
-      return res.status(201).json({ task: parsePage(page) });
+      return res.status(201).json({ task: parsePage(page), polishApplied });
     }
 
     res.status(405).json({ error: "Method not allowed" });
