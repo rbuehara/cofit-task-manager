@@ -181,9 +181,7 @@ export default async function handler(req, res) {
 
     if (req.method === "POST") {
       const task = req.body;
-      // Log completo para debug de atalho iOS (verifica tipos enviados)
-      console.log("POST /api/tasks body:", JSON.stringify(task));
-      if (!task.title) return res.status(400).json({ error: "title is required" });
+if (!task.title) return res.status(400).json({ error: "title is required" });
 
       const scope = task.scope || "trabalho";
       const dbId = databaseId(scope);
@@ -246,11 +244,7 @@ export default async function handler(req, res) {
       }
 
       const page = await r.json();
-      return res.status(201).json({
-        task: parsePage(page),
-        polishApplied,
-        _debug: { polishRaw, doPolish, polishField: task.polish },
-      });
+      return res.status(201).json({ task: parsePage(page), polishApplied });
     }
 
     res.status(405).json({ error: "Method not allowed" });
