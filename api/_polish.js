@@ -37,10 +37,14 @@ async function polishTask({ title, description, existingTags, scope, activeTasks
   const isPessoal = scope === "pessoal";
   const scopeInstructions = isPessoal
     ? `\n\nRegras para scope pessoal:
-- Use polishStrength: light — só reescreva título/descrição se houver ganho claro de clareza. Caso contrário, mantenha o original.
-- NÃO force linguagem profissional. Mantenha tom direto e informal.
+- Sempre corrija ortografia, gramática e capitalização (primeira letra do título em maiúscula).
+- Reescreva o título se estiver incompleto, abreviado ou pouco claro — use linguagem direta, verbos no infinitivo.
+- Se a descrição estiver vazia, crie uma frase curta baseada no título.
+- Se a task envolver comprar, adquirir, encomendar ou buscar um item (produto, peça, material), inclua OBRIGATORIAMENTE a tag "compras" na lista de tags sugeridas.
+- NÃO use linguagem corporativa. Tom informal e direto.
 - Se a task parece continuação de um projeto ativo listado acima, sugira a MESMA tag do projeto.`
     : `\n\nRegras para scope trabalho:
+- Sempre corrija ortografia, gramática e capitalização.
 - Se a task parece continuação de um projeto ativo listado acima, sugira a MESMA tag do projeto.`;
 
   const system = `Você é assistente de produtividade. Tarefas:
