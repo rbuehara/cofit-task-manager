@@ -246,7 +246,11 @@ export default async function handler(req, res) {
       }
 
       const page = await r.json();
-      return res.status(201).json({ task: parsePage(page), polishApplied });
+      return res.status(201).json({
+        task: parsePage(page),
+        polishApplied,
+        _debug: { polishRaw, doPolish, polishField: task.polish },
+      });
     }
 
     res.status(405).json({ error: "Method not allowed" });
