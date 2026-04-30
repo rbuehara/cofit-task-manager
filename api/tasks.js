@@ -1,5 +1,6 @@
 const requireAuth = require("./_auth");
 const { notionHeaders, databaseId, buildProperties, parsePage } = require("./_notion");
+const { polishTask } = require("./_polish");
 
 export default async function handler(req, res) {
   if (!requireAuth(req, res)) return;
@@ -177,9 +178,36 @@ export default async function handler(req, res) {
       const scope = task.scope || "trabalho";
       const dbId = databaseId(scope);
 
+      // Polish opcional (acionado por atalho iOS via "polish": true).
+      // Modo "light" — sem activeTasksByTag/recentCompleted para manter latência baixa.
+      // Em caso de erro, faz graceful degradation: cria a task com texto cru.
+      let finalTitle = task.title;
+      let finalDescription = task.description;
+      let finalTags = task.tags || [];
+
+      if (task.polish) {
+        try {
+          const polished = await polishTask({
+            title: task.title,
+            description: task.description,
+            existingTags: [],
+            scope,
+          });
+          if (polished.title) finalTitle = polished.title;
+          if (polished.description) finalDescription = polished.description;
+          // Merge: tags do usuário primeiro (intenção explícita), sugeridas depois, dedup.
+          finalTags = [...new Set([...(task.tags || []), ...(polished.tags || [])])];
+        } catch (e) {
+          console.error("polish opcional falhou, criando task sem polish:", e.message);
+        }
+      }
+
       const now = new Date().toISOString();
       const props = buildProperties({
         ...task,
+        title: finalTitle,
+        description: finalDescription,
+        tags: finalTags,
         column: task.column || "Inbox",
         createdAt: task.createdAt || now,
         appId: task.appId || crypto.randomUUID(),
